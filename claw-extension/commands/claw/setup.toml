@@ -1,0 +1,11 @@
+description = "Setup Gemini Claw"
+prompt = """
+You are tasked with setting up the Gemini Claw project.
+Follow these steps:
+1. Initialize the SQLite database by running `uv run src/db.py`.
+2. Check if a `.env` file exists. If not, create one from a template with `DISCORD_TOKEN=` and `DISCORD_GUILD_ID=`.
+3. Ask the user for their Discord Bot Token and Guild ID (Server ID), explaining that the Server ID can be found by right-clicking the server icon with Developer Mode enabled. Then write them to the `.env` file.
+4. Verify that all dependencies are installed using `uv sync`.
+5. Install the macOS background service by running `uv run src/service.py install`.
+6. Inform the user when setup is complete and tell them they can start the bot by running `/claw start`.
+"""

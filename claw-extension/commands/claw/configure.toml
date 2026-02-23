@@ -1,0 +1,5 @@
+description = "Configure Gemini Claw"
+prompt = """
+Configuring Gemini Claw...
+!{uv run src/configure.py {{args}}}
+"""

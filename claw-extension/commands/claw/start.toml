@@ -1,0 +1,6 @@
+description = "Start the Gemini Claw Discord Bot (macOS Service)"
+prompt = """
+Starting the Gemini Claw Discord bot via launchctl...
+!{uv run src/service.py start}
+The bot is now running in the background. You can check its logs at `claw.log` and `claw.error.log`.
+"""

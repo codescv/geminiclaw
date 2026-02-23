@@ -1,0 +1,5 @@
+description = "Check the Status of the Gemini Claw Discord Bot (macOS Service)"
+prompt = """
+Checking the status of the Gemini Claw launchctl service...
+!{uv run src/service.py status}
+"""
