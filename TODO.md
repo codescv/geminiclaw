@@ -4,3 +4,5 @@
 - [ ] Allow configuring system prompts
 - [ ] Add memory tool to remember long term memories.
 - [ ] Add a restart command to restart the service.
+- [ ] Better history handling using summarization other than latest K messages.
+- [ ] Handle long responses by sending multiple messages.
