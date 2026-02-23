@@ -62,7 +62,7 @@ Once the extension is linked, use the setup wizard to configure your `.env` file
 ```bash
 gemini --prompt "/claw:setup"
 ```
-*Note: The setup wizard is interactive and will prompt you for your `DISCORD_TOKEN`, `DISCORD_GUILD_ID`, and an optional `HTTP_PROXY` if you are behind one.*
+*Note: Set `HTTP_PROXY` and `HTTPS_PROXY` in `.env` or your shell if you need one for connecting Gemini CLI and Discord API server.*
 
 ## Managing the Bot
 

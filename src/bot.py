@@ -10,6 +10,7 @@ load_dotenv()
 
 TOKEN = os.getenv('DISCORD_TOKEN')
 DB_PATH = "claw.db"
+MAX_RESPONSE_LENGTH = 10000
 
 # Respect HTTP_PROXY/HTTPS_PROXY environment variables
 proxy = os.getenv('HTTP_PROXY') or os.getenv('http_proxy') or os.getenv('HTTPS_PROXY') or os.getenv('https_proxy')
@@ -130,10 +131,11 @@ async def process_pending_messages():
         conn.close()
         
         if channel:
-            formatted_response = f"<@{author_id}> Here's the result:\n```\n{final_response}\n```"
-            if len(formatted_response) > 2000:
-                truncated = final_response[:1900] + "\n... (truncated)"
-                formatted_response = f"<@{author_id}> Here's the result (truncated):\n```\n{truncated}\n```"
+            if len(final_response) > MAX_RESPONSE_LENGTH:
+                truncated = final_response[:MAX_RESPONSE_LENGTH] + "\n... (truncated)"
+                formatted_response = f"<@{author_id}> Here's the result (truncated):\n```markdown\n{truncated}\n```"
+            else:
+                formatted_response = f"<@{author_id}> Here's the result:\n```markdown\n{final_response}\n```"
             
             await channel.send(formatted_response)
             

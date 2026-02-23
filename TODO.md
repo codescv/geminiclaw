@@ -3,3 +3,4 @@
 - [ ] Add option to allow bot to answer unmentioned messages in a channel as well.
 - [ ] Allow configuring system prompts
 - [ ] Add memory tool to remember long term memories.
+- [ ] Add a restart command to restart the service.

@@ -3,6 +3,9 @@ import sys
 import subprocess
 from pathlib import Path
 import shutil
+from dotenv import load_dotenv
+
+load_dotenv()
 
 PLIST_LABEL = "com.gemini.claw"
 PLIST_FILENAME = f"{PLIST_LABEL}.plist"
@@ -29,10 +32,12 @@ def install():
     # Get the current PATH and proxies to ensure the bot can work correctly when launched by launchd
     env_vars = {
         "PATH": os.environ.get('PATH', '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'),
-        "HTTP_PROXY": os.environ.get('HTTP_PROXY', ''),
-        "HTTPS_PROXY": os.environ.get('HTTPS_PROXY', ''),
         "PYTHONUNBUFFERED": "1",
     }
+
+    for key in ['HTTP_PROXY', 'HTTPS_PROXY', 'GOOGLE_API_KEY', 'GOOGLE_CLOUD_PROJECT', 'GOOGLE_CLOUD_LOCATION']:
+        if key in os.environ:
+            env_vars[key] = os.environ[key]
     
     env_vars_str = "\n".join([f"        <key>{k}</key>\n        <string>{v}</string>" for k, v in env_vars.items() if v])
         
@@ -59,7 +64,7 @@ def install():
 {env_vars_str}
     </dict>
     <key>RunAtLoad</key>
-    <false/>
+    <true/>
 </dict>
 </plist>
 """
