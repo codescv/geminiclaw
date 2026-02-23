@@ -10,7 +10,7 @@ load_dotenv()
 
 TOKEN = os.getenv('DISCORD_TOKEN')
 DB_PATH = "claw.db"
-MAX_RESPONSE_LENGTH = 3000
+MAX_RESPONSE_LENGTH = 1900
 
 # Respect HTTP_PROXY/HTTPS_PROXY environment variables
 proxy = os.getenv('HTTP_PROXY') or os.getenv('http_proxy') or os.getenv('HTTPS_PROXY') or os.getenv('https_proxy')
