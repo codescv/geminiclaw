@@ -26,8 +26,15 @@ def install():
         print("Error: 'uv' executable not found. Please ensure it is installed.")
         sys.exit(1)
         
-    # Get the current PATH to ensure uv and other tools work correctly when launched by launchd
-    current_path = os.environ.get('PATH', '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin')
+    # Get the current PATH and proxies to ensure the bot can work correctly when launched by launchd
+    env_vars = {
+        "PATH": os.environ.get('PATH', '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'),
+        "HTTP_PROXY": os.environ.get('HTTP_PROXY', ''),
+        "HTTPS_PROXY": os.environ.get('HTTPS_PROXY', ''),
+        "PYTHONUNBUFFERED": "1",
+    }
+    
+    env_vars_str = "\n".join([f"        <key>{k}</key>\n        <string>{v}</string>" for k, v in env_vars.items() if v])
         
     plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -49,8 +56,7 @@ def install():
     <string>{project_dir / "claw.error.log"}</string>
     <key>EnvironmentVariables</key>
     <dict>
-        <key>PATH</key>
-        <string>{current_path}</string>
+{env_vars_str}
     </dict>
     <key>RunAtLoad</key>
     <false/>

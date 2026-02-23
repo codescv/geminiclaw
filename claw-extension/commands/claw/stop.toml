@@ -1,6 +1,4 @@
-description = "Stop the Gemini Claw Discord Bot (macOS Service)"
-prompt = """
-Stopping the Gemini Claw Discord bot via launchctl...
-!{uv run src/service.py stop}
-The background service has been stopped.
+description = "Stop Gemini Claw (macOS Service)"
+prompt = """Run the following command to stop the bot, then inform the user.
+`uv run src/service.py stop`
 """

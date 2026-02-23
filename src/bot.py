@@ -11,10 +11,13 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 DB_PATH = "claw.db"
 
+# Respect HTTP_PROXY/HTTPS_PROXY environment variables
+proxy = os.getenv('HTTP_PROXY') or os.getenv('http_proxy') or os.getenv('HTTPS_PROXY') or os.getenv('https_proxy')
+
 intents = discord.Intents.default()
 intents.message_content = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents, proxy=proxy)
 
 def get_db_connection():
     # If we are in src/, we need to look one level up for claw.db?

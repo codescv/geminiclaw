@@ -1,0 +1,4 @@
+description = "Start the Gemini Claw Discord Bot in debug mode"
+prompt = """Run the following command in the background to start the bot, then inform the user.
+`uv run src/main.py`
+"""

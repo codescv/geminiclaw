@@ -1,11 +1,18 @@
 description = "Setup Gemini Claw"
 prompt = """
-You are tasked with setting up the Gemini Claw project.
-Follow these steps:
-1. Initialize the SQLite database by running `uv run src/db.py`.
-2. Check if a `.env` file exists. If not, create one from a template with `DISCORD_TOKEN=` and `DISCORD_GUILD_ID=`.
-3. Ask the user for their Discord Bot Token and Guild ID (Server ID), explaining that the Server ID can be found by right-clicking the server icon with Developer Mode enabled. Then write them to the `.env` file.
-4. Verify that all dependencies are installed using `uv sync`.
-5. Install the macOS background service by running `uv run src/service.py install`.
-6. Inform the user when setup is complete and tell them they can start the bot by running `/claw start`.
+You are tasked with setting up or re-configuring the Gemini Claw project.
+Follow these steps carefully:
+
+1. **Check for existing configuration:** Read the `.env` file if it exists. Note any existing values for `DISCORD_TOKEN`, `DISCORD_GUILD_ID`, and `HTTP_PROXY`.
+2. **Interactive Configuration:**
+   - For each of the following settings, show the current value (if it exists) and ask the user if they would like to keep it or update it:
+     - `DISCORD_TOKEN`: If updating, remind the user to enable "Message Content Intent" in the Discord Developer Portal (Bot -> Privileged Gateway Intents).
+     - `DISCORD_GUILD_ID`: If updating, explain that the Server ID can be found by right-clicking the server icon with Developer Mode enabled.
+     - `HTTP_PROXY`: If updating, ask for the proxy URL (e.g., http://127.0.0.1:7890).
+   - If any of these settings are missing or empty, you MUST prompt the user to provide them.
+3. **Save Configuration:** Write the final `DISCORD_TOKEN`, `DISCORD_GUILD_ID`, and `HTTP_PROXY` back to the `.env` file.
+4. **Initialize Database:** Run `uv run src/db.py`.
+5. **Install Dependencies:** Run `uv sync`.
+6. **Install macOS Service:** Run `uv run src/service.py install`.
+7. **Complete:** Inform the user when setup is complete and tell them they can start the bot by running `/claw debug` (a service running in backgroudn) or `/claw start` (a macOS process)
 """
