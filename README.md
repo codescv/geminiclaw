@@ -2,6 +2,23 @@
 
 Gemini Claw is a Discord bot powered by the [Gemini CLI](https://github.com/google/gemini-cli). It acts as a bridge, allowing you to interact with the Gemini CLI agent directly from your Discord server.
 
+## Why Gemini Claw?
+
+The Gemini CLI is already an incredibly capable, full-featured AI agent. However, it is primarily designed for local terminal use and lacks remote communication channels. Gemini Claw solves this by providing a seamless bridge to Discord. 
+
+Instead of building a new agent from scratch, Gemini Claw leverages the power of the existing ecosystem:
+- **Built-in Security:** Inherits the Gemini CLI's robust security policy support, ensuring safe execution of commands.
+- **Simplicity:** A small, easy-to-understand Python codebase that acts merely as a decoupling layer.
+- **Extensibility:** Adds new capabilities through native Gemini CLI extensions rather than reinventing the wheel.
+
+## Screenshots
+
+<div align="center">
+  <img src="images/ss1.PNG" alt="Screenshot 1" width="30%">
+  <img src="images/ss2.PNG" alt="Screenshot 2" width="30%">
+  <img src="images/ss3.PNG" alt="Screenshot 3" width="30%">
+</div>
+
 ## Architecture
 
 Gemini Claw uses a robust SQLite-backed architecture to decouple the Discord bot from the Gemini CLI execution. This ensures that no messages are lost, even if a complex command takes a long time to run.
