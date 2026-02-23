@@ -76,9 +76,36 @@ async def process_pending_messages():
 
     print(f"Processing message {msg_id_db}: {prompt}")
     
+    channel = bot.get_channel(channel_id)
+    if not channel:
+        try:
+            channel = await bot.fetch_channel(channel_id)
+        except Exception:
+            print(f"Could not fetch channel {channel_id}")
+            channel = None
+
+    full_prompt = prompt
+    if channel:
+        try:
+            history_msgs = [msg async for msg in channel.history(limit=20)]
+            history_msgs.reverse()
+            
+            history_text = []
+            for msg in history_msgs:
+                author_name = "Gemini" if msg.author == bot.user else msg.author.name
+                content = msg.clean_content.strip()
+                if content:
+                    history_text.append(f"{author_name}: {content}")
+            
+            if history_text:
+                history_joined = "\n".join(history_text)
+                full_prompt = f"Chat History (last 20 messages):\n{history_joined}\n\nBased on the above context, please respond to the latest request:\n{prompt}"
+        except Exception as e:
+            print(f"Error fetching history: {e}")
+
     try:
         process = await asyncio.create_subprocess_exec(
-            'gemini', '-y', '-p', prompt,
+            'gemini', '-y', '-p', full_prompt,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -101,14 +128,6 @@ async def process_pending_messages():
         )
         conn.commit()
         conn.close()
-
-        channel = bot.get_channel(channel_id)
-        if not channel:
-            try:
-                channel = await bot.fetch_channel(channel_id)
-            except:
-                print(f"Could not fetch channel {channel_id}")
-                channel = None
         
         if channel:
             formatted_response = f"<@{author_id}> Here's the result:\n```\n{final_response}\n```"
