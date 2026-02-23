@@ -1,0 +1,5 @@
+- [ ] Configure workspace directory for running the Gemini CLI sub process. The workspace act as a common place where human and AI agent work together.
+- [ ] Save all messages, not just mentioned ones.
+- [ ] Add option to allow bot to answer unmentioned messages in a channel as well.
+- [ ] Allow configuring system prompts
+- [ ] Add memory tool to remember long term memories.
