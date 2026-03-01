@@ -1,4 +1,6 @@
-- [ ] Configure workspace directory for running the Gemini CLI sub process. The workspace act as a common place where human and AI agent work together.
+- Security
+    - [ ] Configure workspace directory for running the Gemini CLI sub process. The workspace act as a common place where human and AI agent work together.
+    - [ ] Implement sandbox for gemini cli communication. Agent can only read / write the workspace files. Remove yolo flag.
 - [ ] Save all messages, not just mentioned ones.
 - [ ] Add option to allow bot to answer unmentioned messages in a channel as well.
 - [ ] Allow configuring system prompts
@@ -6,3 +8,5 @@
 - [ ] Add a restart command to restart the service.
 - [ ] Better history handling using summarization other than latest K messages.
 - [ ] Handle long responses by sending multiple messages.
+- [ ] Add some logs for outbound messages.
+- [ ] Retry 3 times for a failed message.
