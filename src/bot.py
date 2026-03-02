@@ -105,10 +105,12 @@ async def process_pending_messages():
             print(f"Error fetching history: {e}")
 
     try:
+        cwd = os.getenv('GEMINI_WORKSPACE', '.')
         process = await asyncio.create_subprocess_exec(
-            'gemini', '-y', '-p', full_prompt,
+            'gemini', '-s', '-y', '-p', full_prompt,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
+            cwd=cwd
         )
         
         stdout, stderr = await process.communicate()
