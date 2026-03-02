@@ -55,8 +55,42 @@ async def on_message(message):
         
         await message.add_reaction('✅')
 
+async def send_long_message(channel, content, author_id=None):
+    if not content:
+        return
+
+    lines = content.splitlines(keepends=True)
+    current_chunk = ""
+    first_message = True
+
+    for line in lines:
+        if len(current_chunk) + len(line) <= MAX_RESPONSE_LENGTH:
+            current_chunk += line
+        else:
+            # just to be safe, maybe there is a very long line
+            if len(current_chunk) > MAX_RESPONSE_LENGTH:
+                current_chunk = current_chunk[:MAX_RESPONSE_LENGTH]
+            
+            if current_chunk:
+                if first_message and author_id:
+                    await channel.send(f"<@{author_id}> {current_chunk}")
+                else:
+                    await channel.send(current_chunk)
+                first_message = False
+            
+            current_chunk = line
+
+    if current_chunk:
+        if len(current_chunk) > MAX_RESPONSE_LENGTH:
+            current_chunk = current_chunk[:MAX_RESPONSE_LENGTH]
+        if first_message and author_id:
+            await channel.send(f"<@{author_id}> {current_chunk}")
+        else:
+            await channel.send(current_chunk)
+
 @tasks.loop(seconds=5)
 async def process_pending_messages():
+    """Polls the database for pending messages and processes them."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM messages WHERE status = 'pending' LIMIT 1")
@@ -106,8 +140,12 @@ async def process_pending_messages():
 
     try:
         cwd = os.getenv('GEMINI_WORKSPACE', '.')
+        args = ['gemini', '-y']
+        if os.getenv('GEMINI_SANDBOX') == 'true':
+            args.append('--sandbox')
+        args.extend(['-p', full_prompt])
         process = await asyncio.create_subprocess_exec(
-            'gemini', '-s', '-y', '-p', full_prompt,
+            *args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd
@@ -133,13 +171,8 @@ async def process_pending_messages():
         conn.close()
         
         if channel:
-            if len(final_response) > MAX_RESPONSE_LENGTH:
-                truncated = final_response[:MAX_RESPONSE_LENGTH] + "\n... (truncated)"
-                formatted_response = f"<@{author_id}> Here's the result (truncated):\n{truncated}"
-            else:
-                formatted_response = f"<@{author_id}> Here's the result:\n{final_response}"
-            
-            await channel.send(formatted_response)
+            # Split and send long messages
+            await send_long_message(channel, final_response, author_id)
             
             conn = get_db_connection()
             cursor = conn.cursor()
