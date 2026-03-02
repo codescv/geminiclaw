@@ -133,9 +133,9 @@ async def process_pending_messages():
         if channel:
             if len(final_response) > MAX_RESPONSE_LENGTH:
                 truncated = final_response[:MAX_RESPONSE_LENGTH] + "\n... (truncated)"
-                formatted_response = f"<@{author_id}> Here's the result (truncated):\n```markdown\n{truncated}\n```"
+                formatted_response = f"<@{author_id}> Here's the result (truncated):\n{truncated}"
             else:
-                formatted_response = f"<@{author_id}> Here's the result:\n```markdown\n{final_response}\n```"
+                formatted_response = f"<@{author_id}> Here's the result:\n{final_response}"
             
             await channel.send(formatted_response)
             
