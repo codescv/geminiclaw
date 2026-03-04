@@ -122,6 +122,8 @@ async def process_pending_messages():
     full_prompt = prompt
     if channel:
         try:
+            # TODO now using builtin session management, history is only meaningful 
+            # for groupchats where there are other messages not in the history
             history_msgs = [msg async for msg in channel.history(limit=20)]
             history_msgs.reverse()
             
@@ -134,7 +136,7 @@ async def process_pending_messages():
             
             if history_text:
                 history_joined = "\n".join(history_text)
-                full_prompt = f"Chat History (last 20 messages):\n{history_joined}\n\nBased on the above context, please respond to the latest request:\n{prompt}"
+                # full_prompt = f"Chat History (last 20 messages):\n{history_joined}\n\nBased on the above context, please respond to the latest request:\n{prompt}"
         except Exception as e:
             print(f"Error fetching history: {e}")
 
@@ -143,6 +145,9 @@ async def process_pending_messages():
         args = ['gemini', '-y']
         if os.getenv('GEMINI_SANDBOX') == 'true':
             args.append('--sandbox')
+        session_id = os.getenv('GEMINI_SESSION_ID')
+        if session_id:
+            args.extend(['-r', session_id])
         args.extend(['-p', full_prompt])
         process = await asyncio.create_subprocess_exec(
             *args,
