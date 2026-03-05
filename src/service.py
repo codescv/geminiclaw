@@ -12,6 +12,12 @@ PLIST_FILENAME = f"{PLIST_LABEL}.plist"
 LAUNCH_AGENTS_DIR = Path.home() / "Library" / "LaunchAgents"
 PLIST_PATH = LAUNCH_AGENTS_DIR / PLIST_FILENAME
 
+ENV_VARS = [
+    'HTTP_PROXY', 'HTTPS_PROXY', 
+    'GOOGLE_API_KEY', 'GOOGLE_CLOUD_PROJECT', 'GOOGLE_CLOUD_LOCATION',
+    'GEMINI_WORKSPACE', 'GEMINI_SESSION_ID'
+]
+
 def get_uv_path():
     path = shutil.which("uv")
     if not path:
@@ -35,7 +41,7 @@ def install():
         "PYTHONUNBUFFERED": "1",
     }
 
-    for key in ['HTTP_PROXY', 'HTTPS_PROXY', 'GOOGLE_API_KEY', 'GOOGLE_CLOUD_PROJECT', 'GOOGLE_CLOUD_LOCATION']:
+    for key in ENV_VARS:
         if key in os.environ:
             env_vars[key] = os.environ[key]
     
