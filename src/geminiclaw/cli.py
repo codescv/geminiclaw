@@ -1,5 +1,6 @@
 import sys
 import shutil
+import os
 from enum import Enum
 
 import typer
@@ -14,14 +15,19 @@ def init():
     # Initialize DB
     init_db()
     # Check config.toml
-    if not shutil.os.path.exists("config.toml") and shutil.os.path.exists("config.example.toml"):
-        shutil.copy("config.example.toml", "config.toml")
-        print("Created config.toml from config.example.toml. Please configure it.")
-    elif not shutil.os.path.exists("config.toml"):
-        print("Warning: config.toml not found and config.example.toml is missing.")
-    elif shutil.os.path.exists("config.toml"):
+    if not os.path.exists("config.toml"):
+        try:
+            import importlib.resources
+            example_content = importlib.resources.files("geminiclaw.resources").joinpath("config.example.toml").read_text()
+            with open("config.toml", "w") as f:
+                f.write(example_content)
+            print("Created config.toml from bundled example. Please configure it.")
+        except Exception as e:
+            print(f"Warning: config.toml not found and bundled config.example.toml is missing: {e}")
+        print("Initialization complete. Please ensure you have set all variables in config.toml.")
+    else:
         print("config.toml already exists.")
-    print("Initialization complete. Please ensure you have set all variables in config.toml.")
+
 
 @app.command(help="Start the bot directly")
 def start():
