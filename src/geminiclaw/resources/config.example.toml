@@ -13,6 +13,9 @@ guild_id = "YOUR_GUILD_ID"
 # Optional: The path to the Gemini CLI executable. If not provided, it will be searched in PATH.
 # executable_path = "/usr/local/bin/gemini"
 
+# Optional: Maximum time in seconds to wait for Gemini to respond (default: 600)
+# timeout = 600
+
 # The path to the workspace directory to run the Gemini agent in
 workspace = "/path/to/your/workspace"
 # Whether to run the agent in a sandboxed environment (true/false)

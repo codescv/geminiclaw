@@ -186,15 +186,23 @@ async def process_pending_messages():
             env=env
         )
         
-        stdout, stderr = await process.communicate()
-        response = stdout.decode().strip()
-        error = stderr.decode().strip()
+        timeout_seconds = gemini_config.get('timeout', 600)
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout_seconds)
+            response = stdout.decode().strip()
+            error = stderr.decode().strip()
 
-        final_response = response
-        if not final_response and error:
-            final_response = f"Error: {error}"
-        if not final_response:
-            final_response = "Gemini completed but returned no output."
+            final_response = response
+            if not final_response and error:
+                final_response = f"Error: {error}"
+            if not final_response:
+                final_response = "Gemini completed but returned no output."
+        except asyncio.TimeoutError:
+            try:
+                process.kill()
+            except Exception:
+                pass
+            final_response = f"Error: Gemini command timed out after {timeout_seconds} seconds."
 
         conn = get_db_connection()
         cursor = conn.cursor()
