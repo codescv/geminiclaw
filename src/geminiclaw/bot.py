@@ -155,8 +155,15 @@ async def process_pending_messages():
     try:
         cwd = gemini_config.get('workspace', '.')
         gemini_exec = gemini_config.get('executable_path', 'gemini')
-        args = [gemini_exec, '-y']
-        if gemini_config.get('sandbox') == True:
+        args = [gemini_exec]
+        
+        # Check if the prompt starts with "-y"
+        if full_prompt.startswith('-y '):
+            args.append('-y')
+            # Strip the "-y" part from the prompt before sending it to Gemini
+            full_prompt = full_prompt[2:]
+        elif gemini_config.get('sandbox') == True:
+            # only activate sandbox without -y
             args.append('--sandbox')
         session_id = gemini_config.get('session_id')
         if session_id:
