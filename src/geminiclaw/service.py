@@ -25,7 +25,7 @@ def get_uv_path():
     return path
 
 def install():
-    project_dir = Path(__file__).resolve().parent.parent
+    project_dir = Path.cwd()
     uv_path = get_uv_path()
     if not uv_path:
         print("Error: 'uv' executable not found. Please ensure it is installed.")
@@ -51,8 +51,6 @@ def install():
     <string>{PLIST_LABEL}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>{uv_path}</string>
-        <string>run</string>
         <string>geminiclaw</string>
         <string>start</string>
     </array>

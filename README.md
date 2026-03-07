@@ -27,14 +27,14 @@ Gemini Claw uses a robust SQLite-backed architecture to decouple the Discord bot
 Inbound Channels (Discord) -> SQLite Database -> Polling loop (Python async task) -> Gemini CLI Subprocess -> Outbound Response
 ```
 
-## Setup Instructions
+## Prerequisites
 
-### 1. Prerequisites
+### Dependencies
 - **Python:** Ensure you have [Python](https://www.python.org/downloads/) installed.
 - **uv:** This project uses `uv` for dependency management. Install it via `curl -LsSf https://astral.sh/uv/install.sh | sh`.
 - **Gemini CLI:** Ensure you have the Gemini CLI installed and authenticated.
 
-### 2. Discord Bot Configuration
+### Discord Bot Configuration
 Before running the setup, you need to create a bot on Discord:
 1. Go to the [Discord Developer Portal](https://discord.com/developers/applications).
 2. Click **New Application** and give it a name.
@@ -49,7 +49,46 @@ Before running the setup, you need to create a bot on Discord:
 11. Paste that URL into a new browser tab, select your server, and click **Authorize** to invite the bot.
 12. To get your `DISCORD_GUILD_ID` (Server ID) for setup, open Discord, go to **User Settings** -> **Advanced**, and turn **Developer Mode** ON. Then, right-click your server icon in the left sidebar and click **Copy Server ID**.
 
-### 3. Initialize the Bot
+## Installation
+
+You can install and run `geminiclaw` directly using `uv tool` without cloning the source code:
+
+```bash
+uv tool install git+https://github.com/codescv/geminiclaw.git
+```
+
+### Initialize the Bot
+Once installed, run the following command to initialize the setup:
+```bash
+geminiclaw init
+```
+This will create a `config.toml` file in the current directory and initialize the SQLite database. Please edit the `config.toml` file to add your `DISCORD_TOKEN` and Gemini configuration.
+
+*Note: Set `HTTP_PROXY` and `HTTPS_PROXY` in your shell environment if you need one for connecting Gemini CLI and Discord API server.*
+
+
+### Start the bot Manually (Recommended for inital setup)
+Start the bot manually to verify the configuration and setup.
+```bash
+geminiclaw start
+```
+Now you should be able to text the bot in your server.
+
+### Managing the Bot Service
+
+The `geminiclaw` CLI provides commands to manage the background service natively on macOS using `launchctl`.
+
+- **Install the Service:** `geminiclaw service install` (Installs the macOS background service)
+- **Start the Service:** `geminiclaw service start` (Starts the macOS background service)
+- **Stop the Service:** `geminiclaw service stop` (Stops the macOS background service)
+- **Check Status:** `geminiclaw service status` (Checks the status of the macOS service)
+
+
+## Development
+
+If you are developing or running from the source code, you can use `uv run` within the cloned repository.
+
+### Initialize the Bot (Source)
 The `geminiclaw` package comes with a built-in CLI to manage configuration and the database.
 
 To initialize the setup, run this command from the root of the `geminiclaw` directory:
@@ -60,7 +99,7 @@ This will create a `config.toml` file from the example and initialize the SQLite
 
 *Note: Set `HTTP_PROXY` and `HTTPS_PROXY` in your shell environment if you need one for connecting Gemini CLI and Discord API server.*
 
-## Managing the Bot
+### Managing the Bot (Source)
 
 The `geminiclaw` CLI provides commands to manage the background service natively on macOS using `launchctl`.
 
@@ -69,7 +108,7 @@ The `geminiclaw` CLI provides commands to manage the background service natively
 - **Stop the Service:** `uv run geminiclaw service stop` (Stops the macOS background service)
 - **Check Status:** `uv run geminiclaw service status` (Checks the status of the macOS service)
 
-## Manual Start
+### Manual Start
 
 If you want to see real-time logs and debug any issues (like connection errors or intent problems), you can manually run the bot directly in the foreground:
 ```bash
