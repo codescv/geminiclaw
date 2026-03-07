@@ -58,11 +58,11 @@ gemini extensions link claw-extension
 ```
 
 ### 4. Run the Setup Wizard
-Once the extension is linked, use the setup wizard to configure your `.env` file, initialize the database, and install the macOS background service:
+Once the extension is linked, use the setup wizard to configure your `config.toml` file, initialize the database, and install the macOS background service:
 ```bash
 gemini --prompt "/claw:setup"
 ```
-*Note: Set `HTTP_PROXY` and `HTTPS_PROXY` in `.env` or your shell if you need one for connecting Gemini CLI and Discord API server.*
+*Note: Set `HTTP_PROXY` and `HTTPS_PROXY` in your shell environment if you need one for connecting Gemini CLI and Discord API server.*
 
 ## Managing the Bot
 

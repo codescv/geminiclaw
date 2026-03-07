@@ -20,3 +20,6 @@ wheels/
 
 # Log files
 *.log
+
+# Config file
+config.yaml

@@ -37,8 +37,7 @@ Inbound Channels (e.g. Discord) -> SQLite Database -> Polling loop (Python async
 
 **4. Setup and Configuration Commands**
 - To guide the user during the initial bootstrap, we will write a tiny NodeJS Gemini CLI extension.
-- This extension provides native Gemini CLI commands:
-  - `/claw setup`: Run when the user first clones the repository. It creates a `.env` file, prompts the user for their Discord bot token, initializes the SQLite database schema, and ensures Python dependencies are installed via `uv`.
+  - `/claw setup`: Run when the user first clones the repository. It creates a `config.toml` file, prompts the user for their Discord bot token, initializes the SQLite database schema, and ensures Python dependencies are installed via `uv`.
   - `/claw configure`: Used to update existing configurations later.
 - These commands act as entry points that spawn the respective Python utility scripts (`src/setup.py` and `src/configure.py`) to keep the heavy lifting in Python.
 

@@ -4,11 +4,23 @@ import asyncio
 import subprocess
 import discord
 from discord.ext import tasks, commands
-from dotenv import load_dotenv
+import tomllib
 
-load_dotenv()
+try:
+    with open("config.toml", "rb") as f:
+        config = tomllib.load(f)
+except FileNotFoundError:
+    print("Error: config.toml not found. Please copy config.example.toml to config.toml and configure it.")
+    exit(1)
 
-TOKEN = os.getenv('DISCORD_TOKEN')
+discord_config = config.get("discord", {})
+gemini_config = config.get("gemini", {})
+
+TOKEN = discord_config.get("token")
+if not TOKEN:
+    print("Error: discord.token not found in config.toml")
+    exit(1)
+
 DB_PATH = "claw.db"
 MAX_RESPONSE_LENGTH = 1900
 
@@ -141,19 +153,29 @@ async def process_pending_messages():
             print(f"Error fetching history: {e}")
 
     try:
-        cwd = os.getenv('GEMINI_WORKSPACE', '.')
+        cwd = gemini_config.get('workspace', '.')
         args = ['gemini', '-y']
-        if os.getenv('GEMINI_SANDBOX') == 'true':
+        if gemini_config.get('sandbox') == True:
             args.append('--sandbox')
-        session_id = os.getenv('GEMINI_SESSION_ID')
+        session_id = gemini_config.get('session_id')
         if session_id:
             args.extend(['-r', session_id])
         args.extend(['-p', full_prompt])
+        
+        env = os.environ.copy()
+        if 'api_key' in gemini_config:
+            env['GOOGLE_API_KEY'] = gemini_config['api_key']
+        if 'project' in gemini_config:
+            env['GOOGLE_CLOUD_PROJECT'] = gemini_config['project']
+        if 'location' in gemini_config:
+            env['GOOGLE_CLOUD_LOCATION'] = gemini_config['location']
+
         process = await asyncio.create_subprocess_exec(
             *args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            cwd=cwd
+            cwd=cwd,
+            env=env
         )
         
         stdout, stderr = await process.communicate()
@@ -197,10 +219,7 @@ async def process_pending_messages():
         conn.close()
 
 def main():
-    if not TOKEN:
-        print("DISCORD_TOKEN not found in .env. Please run `/claw setup` first.")
-    else:
-        bot.run(TOKEN)
+    bot.run(TOKEN)
 
 if __name__ == "__main__":
     main()

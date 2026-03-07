@@ -1,0 +1,18 @@
+[discord]
+# The Discord bot token
+token = "YOUR_DISCORD_BOT_TOKEN"
+# Optional: the Guild ID to deploy commands to a specific server
+guild_id = "YOUR_GUILD_ID"
+
+[gemini]
+# Optional: API keys and cloud settings. The Gemini CLI will also respect standard environment variables.
+# api_key = "YOUR_GOOGLE_API_KEY"
+# project = "YOUR_GOOGLE_CLOUD_PROJECT"
+# location = "YOUR_GOOGLE_CLOUD_LOCATION"
+
+# The path to the workspace directory to run the Gemini agent in
+workspace = "/path/to/your/workspace"
+# Whether to run the agent in a sandboxed environment (true/false)
+sandbox = false
+# Optional: The session ID to resume an existing Gemini conversation
+# session_id = "YOUR_SESSION_ID"

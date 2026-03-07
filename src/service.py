@@ -3,9 +3,6 @@ import sys
 import subprocess
 from pathlib import Path
 import shutil
-from dotenv import load_dotenv
-
-load_dotenv()
 
 PLIST_LABEL = "com.gemini.claw"
 PLIST_FILENAME = f"{PLIST_LABEL}.plist"
@@ -15,7 +12,6 @@ PLIST_PATH = LAUNCH_AGENTS_DIR / PLIST_FILENAME
 ENV_VARS = [
     'HTTP_PROXY', 'HTTPS_PROXY', 
     'GOOGLE_API_KEY', 'GOOGLE_CLOUD_PROJECT', 'GOOGLE_CLOUD_LOCATION',
-    'GEMINI_WORKSPACE', 'GEMINI_SESSION_ID'
 ]
 
 def get_uv_path():
