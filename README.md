@@ -76,12 +76,12 @@ Now you should be able to text the bot in your server.
 
 ### Managing the Bot Service
 
-The `geminiclaw` CLI provides commands to manage the background service natively on macOS using `launchctl`.
+The `geminiclaw` CLI provides commands to manage the background service for macOS / Linux.
 
-- **Install the Service:** `geminiclaw service install` (Installs the macOS background service)
-- **Start the Service:** `geminiclaw service start` (Starts the macOS background service)
-- **Stop the Service:** `geminiclaw service stop` (Stops the macOS background service)
-- **Check Status:** `geminiclaw service status` (Checks the status of the macOS service)
+- **Install the Service:** `geminiclaw service install` (Installs the background service)
+- **Start the Service:** `geminiclaw service start` (Starts the background service)
+- **Stop the Service:** `geminiclaw service stop` (Stops the background service)
+- **Check Status:** `geminiclaw service status` (Checks the status of the service)
 
 
 ## Development
@@ -98,15 +98,6 @@ uv run geminiclaw init
 This will create a `config.toml` file from the example and initialize the SQLite database. Please edit the `config.toml` file to add your `DISCORD_TOKEN` and Gemini configuration.
 
 *Note: Set `HTTP_PROXY` and `HTTPS_PROXY` in your shell environment if you need one for connecting Gemini CLI and Discord API server.*
-
-### Managing the Bot (Source)
-
-The `geminiclaw` CLI provides commands to manage the background service natively on macOS using `launchctl`.
-
-- **Install the Service:** `uv run geminiclaw service install` (Installs the macOS background service)
-- **Start the Service:** `uv run geminiclaw service start` (Starts the macOS background service)
-- **Stop the Service:** `uv run geminiclaw service stop` (Stops the macOS background service)
-- **Check Status:** `uv run geminiclaw service status` (Checks the status of the macOS service)
 
 ### Manual Start
 
