@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "geminiclaw"
 version = "0.1.0"
@@ -6,7 +10,11 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "discord-py>=2.6.4",
+    "typer>=0.24.1",
 ]
+
+[project.scripts]
+geminiclaw = "geminiclaw.cli:app"
 
 [dependency-groups]
 dev = [

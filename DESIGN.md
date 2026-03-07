@@ -36,10 +36,10 @@ Inbound Channels (e.g. Discord) -> SQLite Database -> Polling loop (Python async
 - Standard output and standard error are captured. Once the process completes, the output is saved to the `response` field, and the status is updated to `completed` (or `failed` if the exit code is non-zero).
 
 **4. Setup and Configuration Commands**
-- To guide the user during the initial bootstrap, we will write a tiny NodeJS Gemini CLI extension.
-  - `/claw setup`: Run when the user first clones the repository. It creates a `config.toml` file, prompts the user for their Discord bot token, initializes the SQLite database schema, and ensures Python dependencies are installed via `uv`.
-  - `/claw configure`: Used to update existing configurations later.
-- These commands act as entry points that spawn the respective Python utility scripts (`src/setup.py` and `src/configure.py`) to keep the heavy lifting in Python.
+- To guide the user during the initial bootstrap, we provide a CLI interface:
+  - `uv run geminiclaw init`: Run when the user first clones the repository. It creates a `config.toml` file from the example, and initializes the SQLite database schema.
+  - The CLI handles both starting the bot (`uv run geminiclaw start`) and managing the macOS background service (`uv run geminiclaw service`).
+- These commands act as entry points that spawn the respective Python utility functions in `src/geminiclaw/cli.py` to keep the heavy lifting in Python.
 
 ## Process Management
 - **Single Process:** The Discord Bot (`discord.py` client loop) and the database polling mechanism will run within the same Python process using `asyncio` tasks. This avoids the overhead and complexity of managing multiple background services, while still keeping the architecture decoupled via the SQLite layer.

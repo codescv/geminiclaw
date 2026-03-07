@@ -22,4 +22,4 @@ wheels/
 *.log
 
 # Config file
-config.yaml
+config.toml

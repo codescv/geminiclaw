@@ -6,7 +6,7 @@ import os
 # Add src to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
-from bot import send_long_message, MAX_RESPONSE_LENGTH
+from geminiclaw.bot import send_long_message, MAX_RESPONSE_LENGTH
 
 @pytest.mark.asyncio
 async def test_send_long_message_short():

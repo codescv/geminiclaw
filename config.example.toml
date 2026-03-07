@@ -10,9 +10,15 @@ guild_id = "YOUR_GUILD_ID"
 # project = "YOUR_GOOGLE_CLOUD_PROJECT"
 # location = "YOUR_GOOGLE_CLOUD_LOCATION"
 
+# Optional: The path to the Gemini CLI executable. If not provided, it will be searched in PATH.
+# executable_path = "/usr/local/bin/gemini"
+
 # The path to the workspace directory to run the Gemini agent in
 workspace = "/path/to/your/workspace"
 # Whether to run the agent in a sandboxed environment (true/false)
 sandbox = false
 # Optional: The session ID to resume an existing Gemini conversation
+# If set, the agent will resume the conversation with this session ID
+# If not set, the agent will start a new conversation every time you send a new message.
+# Use `gemini --list-sessions` to list existing session IDs.
 # session_id = "YOUR_SESSION_ID"

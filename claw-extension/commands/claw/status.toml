@@ -1,4 +1,0 @@
-description = "Check the Status of Gemini Claw (macOS Service)"
-prompt = """Check the status of the bot using the command below, and then inform the user.
-`uv run src/service.py status`
-"""

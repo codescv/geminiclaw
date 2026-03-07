@@ -1,4 +1,0 @@
-description = "Start Gemini Claw (macOS Service)"
-prompt = """Starting the Gemini Claw bot using the following command, and then inform the user:
-`uv run src/service.py start`
-"""

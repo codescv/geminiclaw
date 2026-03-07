@@ -49,35 +49,31 @@ Before running the setup, you need to create a bot on Discord:
 11. Paste that URL into a new browser tab, select your server, and click **Authorize** to invite the bot.
 12. To get your `DISCORD_GUILD_ID` (Server ID) for setup, open Discord, go to **User Settings** -> **Advanced**, and turn **Developer Mode** ON. Then, right-click your server icon in the left sidebar and click **Copy Server ID**.
 
-### 3. Install the Gemini CLI Extension
-Gemini Claw comes with a custom Gemini CLI extension that provides native `/claw` commands to manage the bot. 
+### 3. Initialize the Bot
+The `geminiclaw` package comes with a built-in CLI to manage configuration and the database.
 
-To install the extension, run this command from the root of the `geminiclaw` directory:
+To initialize the setup, run this command from the root of the `geminiclaw` directory:
 ```bash
-gemini extensions link claw-extension
+uv run geminiclaw init
 ```
+This will create a `config.toml` file from the example and initialize the SQLite database. Please edit the `config.toml` file to add your `DISCORD_TOKEN` and Gemini configuration.
 
-### 4. Run the Setup Wizard
-Once the extension is linked, use the setup wizard to configure your `config.toml` file, initialize the database, and install the macOS background service:
-```bash
-gemini --prompt "/claw:setup"
-```
 *Note: Set `HTTP_PROXY` and `HTTPS_PROXY` in your shell environment if you need one for connecting Gemini CLI and Discord API server.*
 
 ## Managing the Bot
 
-The `claw-extension` provides commands to manage the background service natively on macOS using `launchctl`.
+The `geminiclaw` CLI provides commands to manage the background service natively on macOS using `launchctl`.
 
-- **Start the Bot:** `/claw:start` (Starts the macOS background service)
-- **Stop the Bot:** `/claw:stop` (Stops the macOS background service)
-- **Check Status:** `/claw:status` (Checks the status of the macOS service)
-- **Start the Bot in Debug Mode:** `/claw:debug` (Starts the bot in the background via the CLI for testing/debugging, which runs `src/main.py` under the hood)
-- **Reconfigure:** `/claw:setup` (The setup wizard is smart and will let you review or update existing settings without starting over).
+- **Install the Service:** `uv run geminiclaw service install` (Installs the macOS background service)
+- **Start the Service:** `uv run geminiclaw service start` (Starts the macOS background service)
+- **Stop the Service:** `uv run geminiclaw service stop` (Stops the macOS background service)
+- **Check Status:** `uv run geminiclaw service status` (Checks the status of the macOS service)
 
-## Manual Start (Debug Mode)
-If you want to see real-time logs and debug any issues (like connection errors or intent problems), you can manually run the following command to start the server:
+## Manual Start
+
+If you want to see real-time logs and debug any issues (like connection errors or intent problems), you can manually run the bot directly in the foreground:
 ```bash
-uv run src/main.py
+uv run geminiclaw start
 ```
 This is the recommended way to troubleshoot your initial setup.
 

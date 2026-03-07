@@ -154,7 +154,8 @@ async def process_pending_messages():
 
     try:
         cwd = gemini_config.get('workspace', '.')
-        args = ['gemini', '-y']
+        gemini_exec = gemini_config.get('executable_path', 'gemini')
+        args = [gemini_exec, '-y']
         if gemini_config.get('sandbox') == True:
             args.append('--sandbox')
         session_id = gemini_config.get('session_id')

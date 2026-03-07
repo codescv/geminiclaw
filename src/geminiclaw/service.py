@@ -53,7 +53,8 @@ def install():
     <array>
         <string>{uv_path}</string>
         <string>run</string>
-        <string>{project_dir / "src" / "main.py"}</string>
+        <string>geminiclaw</string>
+        <string>start</string>
     </array>
     <key>WorkingDirectory</key>
     <string>{project_dir}</string>
@@ -106,21 +107,3 @@ def status():
             
     if not found:
         print("Service is not currently loaded or running.")
-
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python service.py [install|start|stop|status]")
-        sys.exit(1)
-        
-    command = sys.argv[1]
-    if command == "install":
-        install()
-    elif command == "start":
-        start()
-    elif command == "stop":
-        stop()
-    elif command == "status":
-        status()
-    else:
-        print(f"Unknown command: {command}")
-        sys.exit(1)
