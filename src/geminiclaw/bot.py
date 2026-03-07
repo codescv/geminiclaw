@@ -168,7 +168,14 @@ async def process_pending_messages():
         session_id = gemini_config.get('session_id')
         if session_id:
             args.extend(['-r', session_id])
+            
+        include_dirs = gemini_config.get('include_directories', [])
+        for inc_dir in include_dirs:
+            args.extend(['--include-directories', inc_dir])
+
         args.extend(['-p', full_prompt])
+
+        print('args:', args)
         
         env = os.environ.copy()
         if 'api_key' in gemini_config:

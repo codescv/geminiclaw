@@ -18,6 +18,10 @@ guild_id = "YOUR_GUILD_ID"
 
 # The path to the workspace directory to run the Gemini agent in
 workspace = "/path/to/your/workspace"
+
+# Optional: A list of additional directories to include in the workspace
+# include_directories = ["/path/to/another/workspace", "/path/to/yet/another"]
+
 # Whether to run the agent in a sandboxed environment (true/false)
 sandbox = false
 # Optional: The session ID to resume an existing Gemini conversation
