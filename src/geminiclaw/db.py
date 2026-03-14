@@ -21,3 +21,42 @@ def init_db():
     conn.commit()
     conn.close()
     print(f"Database initialized at {DB_PATH}")
+
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def insert_message(channel_id, message_id, author_id, prompt, status='pending'):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO messages (channel_id, message_id, author_id, prompt, status) VALUES (?, ?, ?, ?, ?)",
+        (str(channel_id), str(message_id), str(author_id), prompt, status)
+    )
+    conn.commit()
+    conn.close()
+
+def get_pending_message():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM messages WHERE status = 'pending' LIMIT 1")
+    row = cursor.fetchone()
+    conn.close()
+    return row
+
+def update_message_status(msg_id, status, response=None):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if response is not None:
+        cursor.execute(
+            "UPDATE messages SET status = ?, response = ? WHERE id = ?",
+            (status, response, msg_id)
+        )
+    else:
+        cursor.execute(
+            "UPDATE messages SET status = ? WHERE id = ?",
+            (status, msg_id)
+        )
+    conn.commit()
+    conn.close()

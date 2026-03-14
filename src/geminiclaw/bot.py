@@ -4,245 +4,178 @@ import asyncio
 import subprocess
 import discord
 from discord.ext import tasks, commands
-import tomllib
+from . import db
+from .config import Config
 
-try:
-    with open("config.toml", "rb") as f:
-        config = tomllib.load(f)
-except FileNotFoundError:
-    print("Error: config.toml not found. Please copy config.example.toml to config.toml and configure it.")
-    exit(1)
+class GeminiClawBot(commands.Bot):
+    def __init__(self, gemini_config, max_response_length=1900, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.gemini_config = gemini_config
+        self.max_response_length = max_response_length
 
-discord_config = config.get("discord", {})
-gemini_config = config.get("gemini", {})
+    async def on_ready(self):
+        print(f'Logged in as {self.user.name} ({self.user.id})')
+        self.process_pending_messages.start()
 
-TOKEN = discord_config.get("token")
-if not TOKEN:
-    print("Error: discord.token not found in config.toml")
-    exit(1)
-
-DB_PATH = "claw.db"
-MAX_RESPONSE_LENGTH = 1900
-
-# Respect HTTP_PROXY/HTTPS_PROXY environment variables
-proxy = os.getenv('HTTP_PROXY') or os.getenv('http_proxy') or os.getenv('HTTPS_PROXY') or os.getenv('https_proxy')
-
-intents = discord.Intents.default()
-intents.message_content = True
-
-bot = commands.Bot(command_prefix="!", intents=intents, proxy=proxy)
-
-def get_db_connection():
-    # If we are in src/, we need to look one level up for claw.db?
-    # Or keep it relative to CWD.
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-@bot.event
-async def on_ready():
-    print(f'Logged in as {bot.user.name} ({bot.user.id})')
-    process_pending_messages.start()
-
-@bot.event
-async def on_message(message):
-    if message.author == bot.user:
-        return
-
-    if bot.user.mentioned_in(message) or isinstance(message.channel, discord.DMChannel):
-        prompt = message.content.replace(f'<@{bot.user.id}>', '').replace(f'<@!{bot.user.id}>', '').strip()
-        if not prompt:
+    async def on_message(self, message):
+        if message.author == self.user:
             return
 
-        print(f"Received prompt: {prompt} from {message.author}")
+        if self.user.mentioned_in(message) or isinstance(message.channel, discord.DMChannel):
+            prompt = message.content.replace(f'<@{self.user.id}>', '').replace(f'<@!{self.user.id}>', '').strip()
+            if not prompt:
+                return
+
+            print(f"Received prompt: {prompt} from {message.author}")
+            db.insert_message(message.channel.id, message.id, message.author.id, prompt)
+            await message.add_reaction('✅')
+
+    async def send_long_message(self, channel, content, author_id=None):
+        if not content:
+            return
+
+        lines = content.splitlines(keepends=True)
+        current_chunk = ""
+        first_message = True
+
+        for line in lines:
+            if len(current_chunk) + len(line) <= self.max_response_length:
+                current_chunk += line
+            else:
+                if len(current_chunk) > self.max_response_length:
+                    current_chunk = current_chunk[:self.max_response_length]
+                
+                if current_chunk:
+                    if first_message and author_id:
+                        await channel.send(f"<@{author_id}> {current_chunk}")
+                    else:
+                        await channel.send(current_chunk)
+                    first_message = False
+                current_chunk = line
+
+        if current_chunk:
+            if len(current_chunk) > self.max_response_length:
+                current_chunk = current_chunk[:self.max_response_length]
+            if first_message and author_id:
+                await channel.send(f"<@{author_id}> {current_chunk}")
+            else:
+                await channel.send(current_chunk)
+
+    @tasks.loop(seconds=5)
+    async def process_pending_messages(self):
+        """Polls the database for pending messages and processes them."""
+        row = db.get_pending_message()
+        if not row:
+            return
+
+        msg_id_db = row['id']
+        channel_id = int(row['channel_id'])
+        prompt = row['prompt']
+        author_id = row['author_id']
+
+        db.update_message_status(msg_id_db, 'processing')
+        print(f"Processing message {msg_id_db}: {prompt}")
         
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO messages (channel_id, message_id, author_id, prompt, status) VALUES (?, ?, ?, ?, ?)",
-            (str(message.channel.id), str(message.id), str(message.author.id), prompt, 'pending')
-        )
-        conn.commit()
-        conn.close()
-        
-        await message.add_reaction('✅')
-
-async def send_long_message(channel, content, author_id=None):
-    if not content:
-        return
-
-    lines = content.splitlines(keepends=True)
-    current_chunk = ""
-    first_message = True
-
-    for line in lines:
-        if len(current_chunk) + len(line) <= MAX_RESPONSE_LENGTH:
-            current_chunk += line
-        else:
-            # just to be safe, maybe there is a very long line
-            if len(current_chunk) > MAX_RESPONSE_LENGTH:
-                current_chunk = current_chunk[:MAX_RESPONSE_LENGTH]
-            
-            if current_chunk:
-                if first_message and author_id:
-                    await channel.send(f"<@{author_id}> {current_chunk}")
-                else:
-                    await channel.send(current_chunk)
-                first_message = False
-            
-            current_chunk = line
-
-    if current_chunk:
-        if len(current_chunk) > MAX_RESPONSE_LENGTH:
-            current_chunk = current_chunk[:MAX_RESPONSE_LENGTH]
-        if first_message and author_id:
-            await channel.send(f"<@{author_id}> {current_chunk}")
-        else:
-            await channel.send(current_chunk)
-
-@tasks.loop(seconds=5)
-async def process_pending_messages():
-    """Polls the database for pending messages and processes them."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM messages WHERE status = 'pending' LIMIT 1")
-    row = cursor.fetchone()
-    
-    if not row:
-        conn.close()
-        return
-
-    msg_id_db = row['id']
-    channel_id = int(row['channel_id'])
-    prompt = row['prompt']
-    author_id = row['author_id']
-
-    cursor.execute("UPDATE messages SET status = 'processing' WHERE id = ?", (msg_id_db,))
-    conn.commit()
-    conn.close()
-
-    print(f"Processing message {msg_id_db}: {prompt}")
-    
-    channel = bot.get_channel(channel_id)
-    if not channel:
-        try:
-            channel = await bot.fetch_channel(channel_id)
-        except Exception:
-            print(f"Could not fetch channel {channel_id}")
-            channel = None
-
-    full_prompt = prompt
-    if channel:
-        try:
-            # TODO now using builtin session management, history is only meaningful 
-            # for groupchats where there are other messages not in the history
-            history_msgs = [msg async for msg in channel.history(limit=20)]
-            history_msgs.reverse()
-            
-            history_text = []
-            for msg in history_msgs:
-                author_name = "Gemini" if msg.author == bot.user else msg.author.name
-                content = msg.clean_content.strip()
-                if content:
-                    history_text.append(f"{author_name}: {content}")
-            
-            if history_text:
-                history_joined = "\n".join(history_text)
-                # full_prompt = f"Chat History (last 20 messages):\n{history_joined}\n\nBased on the above context, please respond to the latest request:\n{prompt}"
-        except Exception as e:
-            print(f"Error fetching history: {e}")
-
-    try:
-        cwd = gemini_config.get('workspace', '.')
-        gemini_exec = gemini_config.get('executable_path', 'gemini')
-        args = [gemini_exec]
-        
-        # Check if the prompt starts with "-y"
-        if full_prompt.startswith('-y '):
-            args.append('-y')
-            # Strip the "-y" part from the prompt before sending it to Gemini
-            full_prompt = full_prompt[2:]
-        elif gemini_config.get('sandbox') == True:
-            # only activate sandbox without -y
-            args.append('--sandbox')
-        session_id = gemini_config.get('session_id')
-        if session_id:
-            args.extend(['-r', session_id])
-            
-        include_dirs = gemini_config.get('include_directories', [])
-        for inc_dir in include_dirs:
-            args.extend(['--include-directories', inc_dir])
-
-        args.extend(['-p', full_prompt])
-
-        print('args:', args)
-        
-        env = os.environ.copy()
-        if 'api_key' in gemini_config:
-            env['GOOGLE_API_KEY'] = gemini_config['api_key']
-        if 'project' in gemini_config:
-            env['GOOGLE_CLOUD_PROJECT'] = gemini_config['project']
-        if 'location' in gemini_config:
-            env['GOOGLE_CLOUD_LOCATION'] = gemini_config['location']
-
-        process = await asyncio.create_subprocess_exec(
-            *args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=cwd,
-            env=env
-        )
-        
-        timeout_seconds = gemini_config.get('timeout', 600)
-        try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout_seconds)
-            response = stdout.decode().strip()
-            error = stderr.decode().strip()
-
-            final_response = response
-            if not final_response and error:
-                final_response = f"Error: {error}"
-            if not final_response:
-                final_response = "Gemini completed but returned no output."
-        except asyncio.TimeoutError:
+        channel = self.get_channel(channel_id)
+        if not channel:
             try:
-                process.kill()
+                channel = await self.fetch_channel(channel_id)
             except Exception:
-                pass
-            final_response = f"Error: Gemini command timed out after {timeout_seconds} seconds."
+                print(f"Could not fetch channel {channel_id}")
+                channel = None
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE messages SET status = 'completed', response = ? WHERE id = ?",
-            (final_response, msg_id_db)
-        )
-        conn.commit()
-        conn.close()
-        
+        full_prompt = prompt
         if channel:
-            # Split and send long messages
-            await send_long_message(channel, final_response, author_id)
-            
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("UPDATE messages SET status = 'delivered' WHERE id = ?", (msg_id_db,))
-            conn.commit()
-            conn.close()
+            try:
+                history_msgs = [msg async for msg in channel.history(limit=20)]
+                history_msgs.reverse()
+                
+                history_text = []
+                for msg in history_msgs:
+                    author_name = "Gemini" if msg.author == self.user else msg.author.name
+                    content = msg.clean_content.strip()
+                    if content:
+                        history_text.append(f"{author_name}: {content}")
+                
+                if history_text:
+                    history_joined = "\n".join(history_text)
+            except Exception as e:
+                print(f"Error fetching history: {e}")
 
-    except Exception as e:
-        print(f"Error processing message {msg_id_db}: {e}")
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE messages SET status = 'failed', response = ? WHERE id = ?",
-            (str(e), msg_id_db)
-        )
-        conn.commit()
-        conn.close()
+        try:
+            cwd = self.gemini_config.get('workspace', '.')
+            gemini_exec = self.gemini_config.get('executable_path', 'gemini')
+            args = [gemini_exec]
+            
+            if full_prompt.startswith('-y '):
+                args.append('-y')
+                full_prompt = full_prompt[2:]
+            elif self.gemini_config.get('sandbox') == True:
+                args.append('--sandbox')
+            session_id = self.gemini_config.get('session_id')
+            if session_id:
+                args.extend(['-r', session_id])
+                
+            include_dirs = self.gemini_config.get('include_directories', [])
+            for inc_dir in include_dirs:
+                args.extend(['--include-directories', inc_dir])
+
+            args.extend(['-p', full_prompt])
+
+            print('args:', args)
+            
+            env = os.environ.copy()
+            if 'api_key' in self.gemini_config:
+                env['GOOGLE_API_KEY'] = self.gemini_config['api_key']
+            if 'project' in self.gemini_config:
+                env['GOOGLE_CLOUD_PROJECT'] = self.gemini_config['project']
+            if 'location' in self.gemini_config:
+                env['GOOGLE_CLOUD_LOCATION'] = self.gemini_config['location']
+
+            process = await asyncio.create_subprocess_exec(
+                *args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=cwd,
+                env=env
+            )
+            
+            timeout_seconds = self.gemini_config.get('timeout', 600)
+            try:
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout_seconds)
+                response = stdout.decode().strip()
+                error = stderr.decode().strip()
+
+                final_response = response
+                if not final_response and error:
+                    final_response = f"Error: {error}"
+                if not final_response:
+                    final_response = "Gemini completed but returned no output."
+            except asyncio.TimeoutError:
+                try:
+                    process.kill()
+                except Exception:
+                    pass
+                final_response = f"Error: Gemini command timed out after {timeout_seconds} seconds."
+
+            db.update_message_status(msg_id_db, 'completed', final_response)
+            
+            if channel:
+                await self.send_long_message(channel, final_response, author_id)
+                db.update_message_status(msg_id_db, 'delivered')
+
+        except Exception as e:
+            print(f"Error processing message {msg_id_db}: {e}")
+            db.update_message_status(msg_id_db, 'failed', str(e))
 
 def main():
-    bot.run(TOKEN)
+    config = Config()
+
+    intents = discord.Intents.default()
+    intents.message_content = True
+
+    bot = GeminiClawBot(gemini_config=config.gemini, command_prefix="!", intents=intents, proxy=config.proxy)
+    bot.run(config.token)
 
 if __name__ == "__main__":
     main()
