@@ -197,6 +197,11 @@ async def test_process_pending_messages_with_yolo_prompt():
         
         bot.get_channel = AsyncMock(return_value=None)
         bot.fetch_channel = AsyncMock(return_value=None)
+        from unittest.mock import MagicMock
+        bot.get_user = MagicMock()
+        mock_author = MagicMock()
+        mock_author.display_name = 'TestUser'
+        bot.get_user.return_value = mock_author
 
         with patch('asyncio.create_subprocess_exec') as mock_exec:
             process = AsyncMock()
@@ -210,6 +215,6 @@ async def test_process_pending_messages_with_yolo_prompt():
             # Also verify that the prompt passed to Gemini is just "Hello", not "-y Hello"
             # It should be passed after -p
             p_index = args.index('-p')
-            assert args[p_index + 1] == 'Hello'
+            assert args[p_index + 1] == 'TestUser: Hello'
 
 

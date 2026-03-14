@@ -119,24 +119,6 @@ class GeminiClawBot(commands.Bot):
                 print(f"Could not fetch channel {channel_id}")
                 channel = None
 
-        full_prompt = prompt
-        if channel:
-            try:
-                history_msgs = [msg async for msg in channel.history(limit=20)]
-                history_msgs.reverse()
-                
-                history_text = []
-                for msg in history_msgs:
-                    author_name = "Gemini" if msg.author == self.user else msg.author.name
-                    content = msg.clean_content.strip()
-                    if content:
-                        history_text.append(f"{author_name}: {content}")
-                
-                if history_text:
-                    history_joined = "\n".join(history_text)
-            except Exception as e:
-                print(f"Error fetching history: {e}")
-
         system_prompt_path = None
         try:
             cwd = self.gemini_config.get('workspace', '.')
@@ -144,9 +126,9 @@ class GeminiClawBot(commands.Bot):
             args = [gemini_exec]
             
             is_yolo = self.gemini_config.get('yolo', False)
-            if full_prompt.startswith('-y '):
+            if prompt.startswith('-y '):
                 is_yolo = True
-                full_prompt = full_prompt[3:].strip()
+                prompt = prompt[3:].strip()
             if is_yolo:
                 args.append('-y')
             elif self.gemini_config.get('sandbox') == True:
@@ -161,7 +143,19 @@ class GeminiClawBot(commands.Bot):
             for inc_dir in include_dirs:
                 args.extend(['--include-directories', inc_dir])
 
-            args.extend(['-p', full_prompt])
+            # Fetch author or use mention as fallback
+            author = None
+            try:
+                author_id_int = int(author_id)
+                author = self.get_user(author_id_int)
+                if not author:
+                    author = await self.fetch_user(author_id_int)
+            except Exception:
+                pass
+            author_name = author.display_name if author else f"<@{author_id}>"
+
+            prompt = f"{author_name}: {prompt}"
+            args.extend(['-p', prompt])
 
             print('args:', args)
             
