@@ -18,6 +18,12 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS threads (
+            thread_id TEXT PRIMARY KEY,
+            is_active INTEGER DEFAULT 0
+        )
+    ''')
     conn.commit()
     conn.close()
     print(f"Database initialized at {DB_PATH}")
@@ -58,5 +64,25 @@ def update_message_status(msg_id, status, response=None):
             "UPDATE messages SET status = ? WHERE id = ?",
             (status, msg_id)
         )
+    conn.commit()
+    conn.close()
+
+def is_thread_active(thread_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT is_active FROM threads WHERE thread_id = ?", (str(thread_id),))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return bool(row['is_active'])
+    return False
+
+def set_thread_active(thread_id, active=True):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT OR REPLACE INTO threads (thread_id, is_active) VALUES (?, ?)",
+        (str(thread_id), 1 if active else 0)
+    )
     conn.commit()
     conn.close()

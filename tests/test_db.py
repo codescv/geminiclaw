@@ -81,3 +81,20 @@ def test_update_message_status():
     assert updated_row['status'] == 'completed'
     assert updated_row['response'] == 'Test response'
     conn.close()
+
+def test_threads_table():
+    # Test initial state (not active)
+    assert db.is_thread_active("thread123") is False
+    
+    # Set active
+    db.set_thread_active("thread123", True)
+    assert db.is_thread_active("thread123") is True
+    
+    # Set inactive
+    db.set_thread_active("thread123", False)
+    assert db.is_thread_active("thread123") is False
+    
+    # Test multiple threads
+    db.set_thread_active("thread456", True)
+    assert db.is_thread_active("thread123") is False
+    assert db.is_thread_active("thread456") is True

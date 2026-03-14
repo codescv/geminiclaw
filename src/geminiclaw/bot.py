@@ -21,13 +21,48 @@ class GeminiClawBot(commands.Bot):
         if message.author == self.user:
             return
 
-        if self.user.mentioned_in(message) or isinstance(message.channel, discord.DMChannel):
+        is_thread = isinstance(message.channel, discord.Thread)
+        is_dm = isinstance(message.channel, discord.DMChannel)
+        is_bot_mentioned = self.user.mentioned_in(message) or is_dm
+
+        should_reply = False
+
+        if is_bot_mentioned:
+            should_reply = True
+            if is_thread:
+                db.set_thread_active(message.channel.id, True)
+        elif is_thread:
+            if db.is_thread_active(message.channel.id):
+                should_reply = True
+            else:
+                try:
+                    starter_msg = await message.channel.parent.fetch_message(message.channel.id)
+                    if self.user.mentioned_in(starter_msg):
+                        db.set_thread_active(message.channel.id, True)
+                        should_reply = True
+                except Exception as e:
+                    print(f"Error fetching starter message: {e}")
+
+        if should_reply:
             prompt = message.content.replace(f'<@{self.user.id}>', '').replace(f'<@!{self.user.id}>', '').strip()
             if not prompt:
                 return
 
             print(f"Received prompt: {prompt} from {message.author}")
-            db.insert_message(message.channel.id, message.id, message.author.id, prompt)
+            
+            target_channel_id = message.channel.id
+
+            if not is_thread and not is_dm:
+                try:
+                    thread_name = f"Thread: {prompt[:30]}" if len(prompt) > 30 else f"Thread: {prompt}"
+                    thread = await message.create_thread(name=thread_name)
+                    target_channel_id = thread.id
+                    db.set_thread_active(thread.id, True)
+                    print(f"Created thread {thread_name} ({thread.id})")
+                except Exception as e:
+                    print(f"Failed to create thread: {e}")
+
+            db.insert_message(target_channel_id, message.id, message.author.id, prompt)
             await message.add_reaction('✅')
 
     async def send_long_message(self, channel, content, author_id=None):
