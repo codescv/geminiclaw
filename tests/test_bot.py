@@ -145,4 +145,71 @@ async def test_process_pending_messages_with_topic(bot_instance):
             file_path = env['GEMINI_SYSTEM_MD']
             assert os.path.exists(file_path) == False
 
+@pytest.mark.asyncio
+async def test_process_pending_messages_with_yolo_config():
+    from unittest.mock import patch, AsyncMock
+    import discord
+    
+    intents = discord.Intents.default()
+    bot = GeminiClawBot(gemini_config={'yolo': True}, command_prefix="!", intents=intents)
+
+    with patch('geminiclaw.bot.db') as mock_db:
+        mock_db.get_pending_message.return_value = {
+            'id': 1,
+            'channel_id': '123456',
+            'prompt': 'Hello',
+            'author_id': '789',
+            'status': 'pending'
+        }
+        mock_db.get_thread_session.return_value = None
+        
+        bot.get_channel = AsyncMock(return_value=None)
+        bot.fetch_channel = AsyncMock(return_value=None)
+
+        with patch('asyncio.create_subprocess_exec') as mock_exec:
+            process = AsyncMock()
+            process.communicate.return_value = (b'{"response": "Hi"}', b'')
+            mock_exec.return_value = process
+            
+            await bot.process_pending_messages()
+            
+            args, _ = mock_exec.call_args
+            # args[0] is gemini executable, args[1] should be something, let's verify -y is in args
+            assert '-y' in args
+
+@pytest.mark.asyncio
+async def test_process_pending_messages_with_yolo_prompt():
+    from unittest.mock import patch, AsyncMock
+    import discord
+    
+    intents = discord.Intents.default()
+    bot = GeminiClawBot(gemini_config={}, command_prefix="!", intents=intents)
+
+    with patch('geminiclaw.bot.db') as mock_db:
+        mock_db.get_pending_message.return_value = {
+            'id': 1,
+            'channel_id': '123456',
+            'prompt': '-y Hello',
+            'author_id': '789',
+            'status': 'pending'
+        }
+        mock_db.get_thread_session.return_value = None
+        
+        bot.get_channel = AsyncMock(return_value=None)
+        bot.fetch_channel = AsyncMock(return_value=None)
+
+        with patch('asyncio.create_subprocess_exec') as mock_exec:
+            process = AsyncMock()
+            process.communicate.return_value = (b'{"response": "Hi"}', b'')
+            mock_exec.return_value = process
+            
+            await bot.process_pending_messages()
+            
+            args, _ = mock_exec.call_args
+            assert '-y' in args
+            # Also verify that the prompt passed to Gemini is just "Hello", not "-y Hello"
+            # It should be passed after -p
+            p_index = args.index('-p')
+            assert args[p_index + 1] == 'Hello'
+
 

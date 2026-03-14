@@ -143,9 +143,12 @@ class GeminiClawBot(commands.Bot):
             gemini_exec = self.gemini_config.get('executable_path', 'gemini')
             args = [gemini_exec]
             
+            is_yolo = self.gemini_config.get('yolo', False)
             if full_prompt.startswith('-y '):
+                is_yolo = True
+                full_prompt = full_prompt[3:].strip()
+            if is_yolo:
                 args.append('-y')
-                full_prompt = full_prompt[2:]
             elif self.gemini_config.get('sandbox') == True:
                 args.append('--sandbox')
             thread_session = db.get_thread_session(channel_id)
