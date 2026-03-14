@@ -21,9 +21,14 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS threads (
             thread_id TEXT PRIMARY KEY,
-            is_active INTEGER DEFAULT 0
+            is_active INTEGER DEFAULT 0,
+            session_id TEXT
         )
     ''')
+    try:
+        cursor.execute("ALTER TABLE threads ADD COLUMN session_id TEXT")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
     print(f"Database initialized at {DB_PATH}")
@@ -83,6 +88,26 @@ def set_thread_active(thread_id, active=True):
     cursor.execute(
         "INSERT OR REPLACE INTO threads (thread_id, is_active) VALUES (?, ?)",
         (str(thread_id), 1 if active else 0)
+    )
+    conn.commit()
+    conn.close()
+
+def get_thread_session(thread_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT session_id FROM threads WHERE thread_id = ?", (str(thread_id),))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return row['session_id']
+    return None
+
+def set_thread_session(thread_id, session_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE threads SET session_id = ? WHERE thread_id = ?",
+        (session_id, str(thread_id))
     )
     conn.commit()
     conn.close()

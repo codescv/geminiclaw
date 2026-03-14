@@ -98,3 +98,10 @@ def test_threads_table():
     db.set_thread_active("thread456", True)
     assert db.is_thread_active("thread123") is False
     assert db.is_thread_active("thread456") is True
+
+def test_thread_session():
+    db.set_thread_active("thread123", True)
+    assert db.get_thread_session("thread123") is None
+    
+    db.set_thread_session("thread123", "sess123")
+    assert db.get_thread_session("thread123") == "sess123"

@@ -147,9 +147,11 @@ class GeminiClawBot(commands.Bot):
                 full_prompt = full_prompt[2:]
             elif self.gemini_config.get('sandbox') == True:
                 args.append('--sandbox')
-            session_id = self.gemini_config.get('session_id')
-            if session_id:
-                args.extend(['-r', session_id])
+            thread_session = db.get_thread_session(channel_id)
+            if thread_session:
+                args.extend(['-r', thread_session])
+                    
+            args.extend(['-o', 'json'])
                 
             include_dirs = self.gemini_config.get('include_directories', [])
             for inc_dir in include_dirs:
@@ -182,6 +184,17 @@ class GeminiClawBot(commands.Bot):
                 error = stderr.decode().strip()
 
                 final_response = response
+                if response:
+                    try:
+                        import json
+                        parsed = json.loads(response)
+                        final_response = parsed.get("response", response)
+                        new_session_id = parsed.get("session_id")
+                        if new_session_id:
+                            db.set_thread_session(channel_id, new_session_id)
+                    except Exception as e:
+                        print(f"Failed to parse JSON response: {e}")
+
                 if not final_response and error:
                     final_response = f"Error: {error}"
                 if not final_response:
