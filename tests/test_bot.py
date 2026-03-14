@@ -93,3 +93,56 @@ async def test_send_long_message_split_with_mention(bot_instance):
     assert calls[0][0][0] == f"<@123> {line1}"
     # Second chunk does NOT have mention
     assert calls[1][0][0] == line2
+
+@pytest.mark.asyncio
+async def test_process_pending_messages_with_topic(bot_instance):
+    from unittest.mock import patch, AsyncMock
+    import os
+    import discord
+    
+    # Mock db methods in the bot's imported db module
+    with patch('geminiclaw.bot.db') as mock_db:
+        mock_db.get_pending_message.return_value = {
+            'id': 1,
+            'channel_id': '123456',
+            'prompt': 'Hello',
+            'author_id': '789',
+            'status': 'pending'
+        }
+        mock_db.get_thread_session.return_value = None
+        
+        # Mock channel using spec to pass isinstance check
+        channel = AsyncMock(spec=discord.TextChannel)
+        channel.topic = "You are a helpful assistant."
+        
+        # Setup history mock as an async generator
+        async def mock_history(*args, **kwargs):
+            for msg in []:
+                yield msg
+        channel.history.side_effect = mock_history
+        
+        from unittest.mock import MagicMock
+        bot_instance.get_channel = MagicMock(return_value=channel)
+
+        
+        # Mock asyncio.create_subprocess_exec
+        with patch('asyncio.create_subprocess_exec') as mock_exec:
+            process = AsyncMock()
+            process.communicate.return_value = (b'{"response": "Hi"}', b'')
+            mock_exec.return_value = process
+            
+            # Run
+            await bot_instance.process_pending_messages()
+            
+            # Verify env has GEMINI_SYSTEM_MD
+            args, kwargs = mock_exec.call_args
+            env = kwargs.get('env')
+            assert env is not None
+            assert 'GEMINI_SYSTEM_MD' in env
+            assert env['GEMINI_SYSTEM_MD'].startswith('/tmp/gemini_system_')
+            
+            # Verify file was cleaned up by finally block
+            file_path = env['GEMINI_SYSTEM_MD']
+            assert os.path.exists(file_path) == False
+
+

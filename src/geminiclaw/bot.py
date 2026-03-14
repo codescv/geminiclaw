@@ -137,6 +137,7 @@ class GeminiClawBot(commands.Bot):
             except Exception as e:
                 print(f"Error fetching history: {e}")
 
+        system_prompt_path = None
         try:
             cwd = self.gemini_config.get('workspace', '.')
             gemini_exec = self.gemini_config.get('executable_path', 'gemini')
@@ -161,7 +162,23 @@ class GeminiClawBot(commands.Bot):
 
             print('args:', args)
             
+            if channel:
+                topic = None
+                if isinstance(channel, discord.Thread):
+                    if hasattr(channel.parent, 'topic'):
+                        topic = channel.parent.topic
+                elif isinstance(channel, discord.TextChannel):
+                    topic = channel.topic
+                
+                if topic and topic.strip():
+                    system_prompt_path = f"/tmp/gemini_system_{channel_id}.md"
+                    print(f"Using channel topic as system prompt: {topic.strip()}")
+                    with open(system_prompt_path, "w") as f:
+                        f.write(topic.strip())
+            
             env = os.environ.copy()
+            if system_prompt_path:
+                env['GEMINI_SYSTEM_MD'] = system_prompt_path
             if 'api_key' in self.gemini_config:
                 env['GOOGLE_API_KEY'] = self.gemini_config['api_key']
             if 'project' in self.gemini_config:
@@ -215,6 +232,13 @@ class GeminiClawBot(commands.Bot):
         except Exception as e:
             print(f"Error processing message {msg_id_db}: {e}")
             db.update_message_status(msg_id_db, 'failed', str(e))
+        finally:
+            if system_prompt_path and os.path.exists(system_prompt_path):
+                try:
+                    os.remove(system_prompt_path)
+                    print(f"Cleaned up system prompt file: {system_prompt_path}")
+                except Exception as e:
+                    print(f"Failed to remove temp system prompt file {system_prompt_path}: {e}")
 
 def main():
     config = Config()
