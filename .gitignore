@@ -23,3 +23,6 @@ wheels/
 
 # Config file
 config.toml
+
+# store private data (workspaces for testing etc)
+private/

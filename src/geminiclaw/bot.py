@@ -4,18 +4,80 @@ import asyncio
 import subprocess
 import discord
 from discord.ext import tasks, commands
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from . import db
 from .config import Config
 
 class GeminiClawBot(commands.Bot):
-    def __init__(self, gemini_config, max_response_length=1900, *args, **kwargs):
+    def __init__(self, gemini_config, cronjobs=None, max_response_length=1900, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.gemini_config = gemini_config
+        self.cronjobs = cronjobs or []
         self.max_response_length = max_response_length
+        self.scheduler = AsyncIOScheduler()
 
     async def on_ready(self):
         print(f'Logged in as {self.user.name} ({self.user.id})')
         self.process_pending_messages.start()
+        await self.start_cronjobs()
+
+    async def start_cronjobs(self):
+        for job_config in self.cronjobs:
+            schedule = job_config.get("schedule")
+            prompt_file = job_config.get("prompt")
+            channel_id = job_config.get("channel_id")
+            mention_user_id = job_config.get("mention_user_id")
+            if schedule and prompt_file and channel_id:
+                if not os.path.exists(prompt_file):
+                    print(f"Warning: Cronjob prompt file not found at {prompt_file}. Skipping.")
+                    continue
+                try:
+                    self.scheduler.add_job(
+                        self.run_cronjob,
+                        CronTrigger.from_crontab(schedule),
+                        args=[prompt_file, channel_id, mention_user_id]
+                    )
+                    print(f"Added cronjob: {schedule} -> {prompt_file} in {channel_id}")
+                except Exception as e:
+                    print(f"Failed to add cronjob {job_config}: {e}")
+        self.scheduler.start()
+
+    async def run_cronjob(self, prompt_file, channel_id, mention_user_id=None):
+        try:
+            if not os.path.exists(prompt_file):
+                print(f"Cronjob Error: Prompt file not found at {prompt_file}")
+                return
+
+            with open(prompt_file, "r") as f:
+                prompt = f.read().strip()
+            if not prompt:
+                print(f"Cronjob Error: Prompt file {prompt_file} is empty.")
+                return
+
+            channel = self.get_channel(int(channel_id))
+            if not channel:
+                try:
+                    channel = await self.fetch_channel(int(channel_id))
+                except Exception:
+                    print(f"Cronjob Error: Could not fetch channel {channel_id}")
+                    return
+
+            if not channel:
+                print(f"Cronjob Error: Channel {channel_id} not found.")
+                return
+
+            thread_name = f"Cronjob: {prompt[:30]}" if len(prompt) > 30 else f"Cronjob: {prompt}"
+            thread = await channel.create_thread(name=thread_name)
+            await thread.send(f"🤖 *Executing cronjob...* <@{mention_user_id}>" if mention_user_id else "🤖 *Executing cronjob...*")
+            db.set_thread_active(thread.id, True)
+
+            # Insert with bot's ID as author to process Normally
+            db.insert_message(thread.id, "0", str(self.user.id), prompt)
+            print(f"Cronjob triggered: {prompt_file} scheduled running in thread {thread.id}")
+
+        except Exception as e:
+            print(f"Error running cronjob {prompt_file}: {e}")
 
     async def on_message(self, message):
         if message.author == self.user:
@@ -154,7 +216,8 @@ class GeminiClawBot(commands.Bot):
                 pass
             author_name = author.display_name if author else f"<@{author_id}>"
 
-            prompt = f"{author_name}: {prompt}"
+            if author_id != str(self.user.id):
+                prompt = f"{author_name}: {prompt}"
             args.extend(['-p', prompt])
 
             print('args:', args)
@@ -223,7 +286,9 @@ class GeminiClawBot(commands.Bot):
             db.update_message_status(msg_id_db, 'completed', final_response)
             
             if channel:
-                await self.send_long_message(channel, final_response, author_id)
+                # Skip mentioning if author is the bot itself (cronjob)
+                reply_author_id = author_id if author_id != str(self.user.id) else None
+                await self.send_long_message(channel, final_response, reply_author_id)
                 db.update_message_status(msg_id_db, 'delivered')
 
         except Exception as e:
@@ -243,7 +308,7 @@ def main():
     intents = discord.Intents.default()
     intents.message_content = True
 
-    bot = GeminiClawBot(gemini_config=config.gemini, command_prefix="!", intents=intents, proxy=config.proxy)
+    bot = GeminiClawBot(gemini_config=config.gemini, cronjobs=config.cronjobs, command_prefix="!", intents=intents, proxy=config.proxy)
     bot.run(config.token)
 
 if __name__ == "__main__":

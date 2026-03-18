@@ -113,3 +113,32 @@ Once started, simply mention the bot in your Discord server followed by your pro
 ```text
 @GeminiClaw write a python script to reverse a string
 ```
+
+## Cronjobs
+
+You can configure periodic tasks (cronjobs) that read a prompt file, execute it using Gemini, and send the output to a specific Discord channel in a new thread.
+
+### Configuration
+
+Add `[[cronjob]]` sections to your `config.toml` (or `private/config.toml`):
+
+```toml
+[[cronjob]]
+schedule = "*/5 * * * *"                     # Cron schedule expression
+prompt = "cronjobs/daily_summary.md"         # Path to the prompt file
+channel_id = "123456789012345678"            # Discord Channel ID (find in https://discord.com/channels/server_id/channel_id)
+mention_user_id = "123456789012345678"       # Optional: Your User ID to join the thread automatically
+```
+
+### 📖 Tutorial: How to find your Discord User ID
+
+To automatically join threads created by cronjobs, populate the `mention_user_id` field.
+
+1. **Enable Developer Mode**:
+   - Go to Discord **User Settings** -> **Advanced**.
+   - Toggle **Developer Mode** to **ON**.
+
+2. **Copy Your User ID**:
+   - Right-click your **avatar/name** in any member list or chat.
+   - Click **Copy User ID** at the bottom of the menu.
+

@@ -4,15 +4,26 @@ import sys
 
 class Config:
     def __init__(self, path="config.toml"):
-        try:
-            with open(path, "rb") as f:
-                self._raw_config = tomllib.load(f)
-        except FileNotFoundError:
-            print(f"Error: {path} not found. Please copy config.example.toml to config.toml and configure it.")
+        paths = [path, os.path.join("private", "config.toml")]
+        self._raw_config = {}
+        loaded = False
+        for p in paths:
+            if os.path.exists(p):
+                try:
+                    with open(p, "rb") as f:
+                        self._raw_config = tomllib.load(f)
+                    loaded = True
+                    break
+                except Exception as e:
+                    print(f"Error loading {p}: {e}")
+        
+        if not loaded:
+            print(f"Error: Config file not found in {paths}. Please copy config.example.toml to config.toml and configure it.")
             sys.exit(1)
 
         self.discord = self._raw_config.get("discord", {})
         self.gemini = self._raw_config.get("gemini", {})
+        self.cronjobs = self._raw_config.get("cronjob", [])
         
         self.token = self.discord.get("token")
         if not self.token:
