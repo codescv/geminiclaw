@@ -158,7 +158,7 @@ class GeminiClawBot(commands.Bot):
 
         if should_reply:
             prompt = message.content.replace(f'<@{self.user.id}>', '').replace(f'<@!{self.user.id}>', '').strip()
-            if not prompt:
+            if not prompt and not message.attachments:
                 return
 
             print(f"Received prompt: {prompt} from {message.author}")
@@ -167,7 +167,7 @@ class GeminiClawBot(commands.Bot):
 
             if not is_thread and not is_dm:
                 try:
-                    thread_name = await self.generate_thread_summary(prompt)
+                    thread_name = await self.generate_thread_summary(prompt if prompt else "Attachment")
                     thread = await message.create_thread(name=thread_name)
                     target_channel_id = thread.id
                     db.set_thread_active(thread.id, True)
@@ -175,7 +175,29 @@ class GeminiClawBot(commands.Bot):
                 except Exception as e:
                     print(f"Failed to create thread: {e}")
 
-            db.insert_message(target_channel_id, message.id, message.author.id, prompt)
+            attachments_paths = []
+            if message.attachments:
+                cwd = self.gemini_config.get('workspace', '.')
+                attachments_dir = self.gemini_config.get('attachments_dir', 'attachments')
+                if not os.path.isabs(attachments_dir):
+                    attachments_dir = os.path.join(cwd, attachments_dir)
+                try:
+                    os.makedirs(attachments_dir, exist_ok=True)
+                    for attachment in message.attachments:
+                        safe_name = f"{message.id}_{attachment.filename}"
+                        filepath = os.path.join(attachments_dir, safe_name)
+                        await attachment.save(filepath)
+                        if filepath.startswith(os.path.abspath(cwd)):
+                            rel_path = os.path.relpath(filepath, cwd)
+                        else:
+                            rel_path = filepath
+                        attachments_paths.append(rel_path)
+                    print(f"Downloaded {len(attachments_paths)} attachments to {attachments_dir}")
+                except Exception as e:
+                    print(f"Failed to download attachments: {e}")
+
+            attachments_json = json.dumps(attachments_paths) if attachments_paths else None
+            db.insert_message(target_channel_id, message.id, message.author.id, prompt, attachments=attachments_json)
             await message.add_reaction('✅')
 
     async def send_long_message(self, channel, content, author_id=None):
@@ -220,9 +242,24 @@ class GeminiClawBot(commands.Bot):
         channel_id = int(row['channel_id'])
         prompt = row['prompt']
         author_id = row['author_id']
+        attachments_json = row['attachments'] if 'attachments' in row.keys() else None
 
         db.update_message_status(msg_id_db, 'processing')
         print(f"Processing message {msg_id_db}: {prompt}")
+        
+        attachments = []
+        if attachments_json:
+            try:
+                attachments = json.loads(attachments_json)
+            except Exception:
+                pass
+
+        if attachments:
+            if not prompt:
+                prompt = ""
+            prompt += "\n\nAttachments:"
+            for attach in attachments:
+                prompt += f"\n- {attach}"
         
         channel = self.get_channel(channel_id)
         if not channel:
@@ -255,6 +292,11 @@ class GeminiClawBot(commands.Bot):
             include_dirs = self.gemini_config.get('include_directories', [])
             for inc_dir in include_dirs:
                 args.extend(['--include-directories', inc_dir])
+                
+            attachments_dir = self.gemini_config.get('attachments_dir', 'attachments')
+            if os.path.isabs(attachments_dir):
+                if attachments_dir not in include_dirs:
+                    args.extend(['--include-directories', attachments_dir])
 
             # Fetch author or use mention as fallback
             author = None

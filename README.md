@@ -113,7 +113,21 @@ Once started, simply mention the bot in your Discord server followed by your pro
 ```text
 @GeminiClaw write a python script to reverse a string
 ```
-
+ 
+## Attachments Support
+ 
+Gemini Claw supports downloading and passing message attachments (files, images, etc.) to the Gemini CLI agent, making them available in the workspace.
+ 
+### Configuration
+You can configure the directory where attachments are saved in your `config.toml` under the `[gemini]` section:
+ 
+```toml
+[gemini]
+# Optional: The directory to save attachments to (relative to workspace or absolute).
+# Defaults to "attachments" inside the workspace.
+attachments_dir = "attachments"
+```
+ 
 ## Cronjobs
 
 You can configure periodic tasks (cronjobs) that read a prompt file, execute it using Gemini, and send the output to a specific Discord channel in a new thread.

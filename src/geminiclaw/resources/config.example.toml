@@ -24,10 +24,14 @@ workspace = "/path/to/your/workspace"
 
 # Whether to run the agent in a sandboxed environment (true/false)
 sandbox = false
-
+ 
 # Whether to always run Gemini with YOLO mode enabled (-y) (true/false)
 # yolo = false
-
+ 
+# Optional: The directory to save attachments to (relative to workspace or absolute).
+# Defaults to "attachments" inside the workspace.
+# attachments_dir = "attachments"
+ 
 [[cronjob]]
 schedule = "10 13 * * *"
 prompt = "cronjobs/test.md"

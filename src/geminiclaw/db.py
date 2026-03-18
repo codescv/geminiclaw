@@ -29,21 +29,25 @@ def init_db():
         cursor.execute("ALTER TABLE threads ADD COLUMN session_id TEXT")
     except sqlite3.OperationalError:
         pass
+    try:
+        cursor.execute("ALTER TABLE messages ADD COLUMN attachments TEXT")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
     print(f"Database initialized at {DB_PATH}")
-
+ 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
-
-def insert_message(channel_id, message_id, author_id, prompt, status='pending'):
+ 
+def insert_message(channel_id, message_id, author_id, prompt, attachments=None, status='pending'):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO messages (channel_id, message_id, author_id, prompt, status) VALUES (?, ?, ?, ?, ?)",
-        (str(channel_id), str(message_id), str(author_id), prompt, status)
+        "INSERT INTO messages (channel_id, message_id, author_id, prompt, attachments, status) VALUES (?, ?, ?, ?, ?, ?)",
+        (str(channel_id), str(message_id), str(author_id), prompt, attachments, status)
     )
     conn.commit()
     conn.close()

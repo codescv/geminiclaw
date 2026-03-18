@@ -32,7 +32,7 @@ def test_init_db():
     conn.close()
 
 def test_insert_message():
-    db.insert_message("123", "456", "789", "Hello prompt")
+    db.insert_message("123", "456", "789", "Hello prompt", attachments='["file1.txt"]')
     
     conn = sqlite3.connect(TEST_DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -45,6 +45,7 @@ def test_insert_message():
     assert row['author_id'] == '789'
     assert row['prompt'] == 'Hello prompt'
     assert row['status'] == 'pending'
+    assert row['attachments'] == '["file1.txt"]'
     conn.close()
 
 def test_get_pending_message():

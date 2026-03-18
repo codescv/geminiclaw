@@ -40,6 +40,16 @@ Inbound Channels (e.g. Discord) -> SQLite Database -> Polling loop (Python async
   - `uv run geminiclaw init`: Run when the user first clones the repository. It creates a `config.toml` file from the example, and initializes the SQLite database schema.
   - The CLI handles both starting the bot (`uv run geminiclaw start`) and managing the background service for macOS and Linux (`uv run geminiclaw service`).
 - These commands act as entry points that spawn the respective Python utility functions in `src/geminiclaw/cli.py` to keep the heavy lifting in Python.
-
+ 
+**5. Attachments Handling**
+- **Download**: Any file attached to a message mentioning the bot is downloaded to a configurable directory (e.g., inside the workspace).
+- **Prompt Enrichment**: The bot appends an `Attachments:` list to the prompt, referencing the downloaded files (e.g., `- attachments/message_id_filename.ext`). This informs the agent about availability.
+- **Agent Access**: Since files are in the workspace or included via `--include-directories`, the Gemini CLI agent can access them using its tools (like reading files).
+ 
+**6. Cronjobs Management**
+- **Triggering**: Periodically triggers based on `cron` schedule expressions using `apscheduler`.
+- **Flow**: Reads a prompt file and inserts a **pending message** into the SQLite database with the thread's ID (or creates a thread) and sets the `author_id` to the bot's own ID.
+- **Processing**: The standard async polling loop automatically picks this up, executes it with the Gemini agent, and delivers the response into the thread just like a normal user prompt. This decouples scheduling from execution logic.
+ 
 ## Process Management
 - **Single Process:** The Discord Bot (`discord.py` client loop) and the database polling mechanism will run within the same Python process using `asyncio` tasks. This avoids the overhead and complexity of managing multiple background services, while still keeping the architecture decoupled via the SQLite layer.

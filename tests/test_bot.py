@@ -11,9 +11,19 @@ from geminiclaw.bot import GeminiClawBot
 
 @pytest.fixture
 def bot_instance():
+    from unittest.mock import patch, MagicMock, PropertyMock
     intents = discord.Intents.default()
-    return GeminiClawBot(gemini_config={}, command_prefix="!", intents=intents)
-
+    bot = GeminiClawBot(gemini_config={}, command_prefix="!", intents=intents)
+    
+    # Patch the user property
+    patcher = patch('geminiclaw.bot.GeminiClawBot.user', new_callable=PropertyMock)
+    mock_user = patcher.start()
+    mock_user.return_value = MagicMock(id="12345")
+    
+    yield bot
+    
+    patcher.stop()
+ 
 @pytest.mark.asyncio
 async def test_send_long_message_short(bot_instance):
     channel = AsyncMock()
@@ -146,12 +156,10 @@ async def test_process_pending_messages_with_topic(bot_instance):
             assert os.path.exists(file_path) == False
 
 @pytest.mark.asyncio
-async def test_process_pending_messages_with_yolo_config():
+async def test_process_pending_messages_with_yolo_config(bot_instance):
     from unittest.mock import patch, AsyncMock
-    import discord
     
-    intents = discord.Intents.default()
-    bot = GeminiClawBot(gemini_config={'yolo': True}, command_prefix="!", intents=intents)
+    bot_instance.gemini_config['yolo'] = True
 
     with patch('geminiclaw.bot.db') as mock_db:
         mock_db.get_pending_message.return_value = {
@@ -163,28 +171,23 @@ async def test_process_pending_messages_with_yolo_config():
         }
         mock_db.get_thread_session.return_value = None
         
-        bot.get_channel = AsyncMock(return_value=None)
-        bot.fetch_channel = AsyncMock(return_value=None)
+        bot_instance.get_channel = AsyncMock(return_value=None)
+        bot_instance.fetch_channel = AsyncMock(return_value=None)
 
         with patch('asyncio.create_subprocess_exec') as mock_exec:
             process = AsyncMock()
             process.communicate.return_value = (b'{"response": "Hi"}', b'')
             mock_exec.return_value = process
             
-            await bot.process_pending_messages()
+            await bot_instance.process_pending_messages()
             
             args, _ = mock_exec.call_args
-            # args[0] is gemini executable, args[1] should be something, let's verify -y is in args
             assert '-y' in args
 
 @pytest.mark.asyncio
-async def test_process_pending_messages_with_yolo_prompt():
+async def test_process_pending_messages_with_yolo_prompt(bot_instance):
     from unittest.mock import patch, AsyncMock
-    import discord
     
-    intents = discord.Intents.default()
-    bot = GeminiClawBot(gemini_config={}, command_prefix="!", intents=intents)
-
     with patch('geminiclaw.bot.db') as mock_db:
         mock_db.get_pending_message.return_value = {
             'id': 1,
@@ -195,20 +198,20 @@ async def test_process_pending_messages_with_yolo_prompt():
         }
         mock_db.get_thread_session.return_value = None
         
-        bot.get_channel = AsyncMock(return_value=None)
-        bot.fetch_channel = AsyncMock(return_value=None)
+        bot_instance.get_channel = AsyncMock(return_value=None)
+        bot_instance.fetch_channel = AsyncMock(return_value=None)
         from unittest.mock import MagicMock
-        bot.get_user = MagicMock()
+        bot_instance.get_user = MagicMock()
         mock_author = MagicMock()
         mock_author.display_name = 'TestUser'
-        bot.get_user.return_value = mock_author
+        bot_instance.get_user.return_value = mock_author
 
         with patch('asyncio.create_subprocess_exec') as mock_exec:
             process = AsyncMock()
             process.communicate.return_value = (b'{"response": "Hi"}', b'')
             mock_exec.return_value = process
             
-            await bot.process_pending_messages()
+            await bot_instance.process_pending_messages()
             
             args, _ = mock_exec.call_args
             assert '-y' in args
@@ -217,4 +220,41 @@ async def test_process_pending_messages_with_yolo_prompt():
             p_index = args.index('-p')
             assert args[p_index + 1] == 'TestUser: Hello'
 
+@pytest.mark.asyncio
+async def test_process_pending_messages_with_attachments(bot_instance):
+    from unittest.mock import patch, AsyncMock
+    
+    with patch('geminiclaw.bot.db') as mock_db:
+        mock_db.get_pending_message.return_value = {
+            'id': 1,
+            'channel_id': '123456',
+            'prompt': 'Analyze this',
+            'author_id': '789',
+            'status': 'pending',
+            'attachments': '["attachments/file1.txt"]'
+        }
+        mock_db.get_thread_session.return_value = None
+        
+        bot_instance.get_channel = AsyncMock(return_value=None)
+        bot_instance.fetch_channel = AsyncMock(return_value=None)
+        
+        from unittest.mock import MagicMock
+        bot_instance.get_user = MagicMock()
+        mock_author = MagicMock()
+        mock_author.display_name = 'TestUser'
+        bot_instance.get_user.return_value = mock_author
 
+        with patch('asyncio.create_subprocess_exec') as mock_exec:
+            process = AsyncMock()
+            process.communicate.return_value = (b'{"response": "Hi"}', b'')
+            mock_exec.return_value = process
+            
+            await bot_instance.process_pending_messages()
+            
+            args, _ = mock_exec.call_args
+            p_index = args.index('-p')
+            prompt_arg = args[p_index + 1]
+            
+            assert 'TestUser: Analyze this' in prompt_arg
+            assert 'Attachments:' in prompt_arg
+            assert '- attachments/file1.txt' in prompt_arg
