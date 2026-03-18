@@ -28,3 +28,8 @@ sandbox = false
 # Whether to always run Gemini with YOLO mode enabled (-y) (true/false)
 # yolo = false
 
+[[cronjob]]
+schedule = "10 13 * * *"
+prompt = "cronjobs/test.md"
+channel_id = "channel id"
+mention_user_id = "your user id"

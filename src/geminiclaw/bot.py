@@ -1,4 +1,5 @@
 import os
+import json
 import sqlite3
 import asyncio
 import subprocess
@@ -43,6 +44,55 @@ class GeminiClawBot(commands.Bot):
                     print(f"Failed to add cronjob {job_config}: {e}")
         self.scheduler.start()
 
+    async def generate_thread_summary(self, prompt):
+        try:
+            summary_prompt = (
+                "Provide a single-line, concise thread title based on this initial prompt,"
+                f"in the same language as the prompt: {prompt}"
+            )
+            executable = self.gemini_config.get('executable_path', 'gemini')
+            args = [executable, "-o", "json", "-p", summary_prompt]
+            cwd = self.gemini_config.get('workspace', '.')
+            
+            env = os.environ.copy()
+            if 'api_key' in self.gemini_config:
+                env['GOOGLE_API_KEY'] = self.gemini_config['api_key']
+            if 'project' in self.gemini_config:
+                env['GOOGLE_CLOUD_PROJECT'] = self.gemini_config['project']
+            if 'location' in self.gemini_config:
+                env['GOOGLE_CLOUD_LOCATION'] = self.gemini_config['location']
+
+            process = await asyncio.create_subprocess_exec(
+                *args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=cwd,
+                env=env
+            )
+            try:
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
+                if process.returncode == 0:
+                    try:
+                        parsed = json.loads(stdout.decode().strip())
+                        summary = parsed.get("response", "").strip()
+                        if summary:
+                            if summary.startswith('"') and summary.endswith('"'):
+                                summary = summary[1:-1]
+                            return summary
+                    except Exception:
+                        pass
+            except asyncio.TimeoutError:
+                try:
+                    process.kill()
+                except Exception:
+                    pass
+            
+        except Exception as e:
+            print(f"Failed to generate thread summary: {e}")
+        
+        clean = " ".join(prompt.splitlines()).strip()
+        return clean[:30] if len(clean) > 30 else clean
+
     async def run_cronjob(self, prompt_file, channel_id, mention_user_id=None):
         try:
             if not os.path.exists(prompt_file):
@@ -67,7 +117,8 @@ class GeminiClawBot(commands.Bot):
                 print(f"Cronjob Error: Channel {channel_id} not found.")
                 return
 
-            thread_name = f"Cronjob: {prompt[:30]}" if len(prompt) > 30 else f"Cronjob: {prompt}"
+            thread_name = await self.generate_thread_summary(prompt)
+            print(f"Cronjob: Creating thread '{thread_name}' in channel {channel_id}")
             thread = await channel.create_thread(name=thread_name)
             await thread.send(f"🤖 *Executing cronjob...* <@{mention_user_id}>" if mention_user_id else "🤖 *Executing cronjob...*")
             db.set_thread_active(thread.id, True)
@@ -116,7 +167,7 @@ class GeminiClawBot(commands.Bot):
 
             if not is_thread and not is_dm:
                 try:
-                    thread_name = f"Thread: {prompt[:30]}" if len(prompt) > 30 else f"Thread: {prompt}"
+                    thread_name = await self.generate_thread_summary(prompt)
                     thread = await message.create_thread(name=thread_name)
                     target_channel_id = thread.id
                     db.set_thread_active(thread.id, True)
@@ -262,8 +313,7 @@ class GeminiClawBot(commands.Bot):
 
                 final_response = response
                 if response:
-                    try:
-                        import json
+                    try: 
                         parsed = json.loads(response)
                         final_response = parsed.get("response", response)
                         new_session_id = parsed.get("session_id")
