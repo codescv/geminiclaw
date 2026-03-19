@@ -6,6 +6,7 @@ import subprocess
 import discord
 from discord.ext import tasks, commands
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import time
 from apscheduler.triggers.cron import CronTrigger
 from . import db
 from .config import Config
@@ -288,7 +289,7 @@ class GeminiClawBot(commands.Bot):
             if thread_session:
                 args.extend(['-r', thread_session])
                     
-            args.extend(['-o', 'json'])
+            args.extend(['-o', 'stream-json'])
                 
             include_dirs = self.gemini_config.get('include_directories', [])
             for inc_dir in include_dirs:
@@ -350,38 +351,92 @@ class GeminiClawBot(commands.Bot):
             
             timeout_seconds = self.gemini_config.get('timeout', 600)
             try:
-                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout_seconds)
-                response = stdout.decode().strip()
-                error = stderr.decode().strip()
+                current_chunk = ""
+                final_response = ""
+                discord_msg = None
+                last_edit_time = time.time()
+                edit_interval = 1.0
+                streamed = False
 
-                final_response = response
-                if response:
-                    try: 
-                        parsed = json.loads(response)
-                        final_response = parsed.get("response", response)
-                        new_session_id = parsed.get("session_id")
-                        if new_session_id:
-                            db.set_thread_session(channel_id, new_session_id)
+                if channel:
+                    try:
+                        reply_author_id = author_id if author_id != str(self.user.id) else None
+                        prefix = f"<@{reply_author_id}> " if reply_author_id else ""
+                        discord_msg = await channel.send(f"{prefix}*Thinking...*")
+                        streamed = True
                     except Exception as e:
-                        print(f"Failed to parse JSON response: {e}")
+                        print(f"Failed to send initial message: {e}")
 
-                if not final_response and error:
-                    final_response = f"Error: {error}"
+                while True:
+                    line = await asyncio.wait_for(process.stdout.readline(), timeout=timeout_seconds)
+                    if not line:
+                        break
+                    
+                    line_str = line.decode().strip()
+                    if not line_str:
+                        continue
+
+                    try:
+                        parsed = json.loads(line_str)
+                        if parsed.get("type") == "message" and parsed.get("role") == "assistant":
+                            content = parsed.get("content", "")
+                            current_chunk += content
+                            final_response += content
+
+                            if discord_msg and time.time() - last_edit_time > edit_interval:
+                                if len(current_chunk) > self.max_response_length:
+                                    await discord_msg.edit(content=current_chunk[:self.max_response_length])
+                                    residue = current_chunk[self.max_response_length:]
+                                    discord_msg = await channel.send(residue)
+                                    current_chunk = residue
+                                else:
+                                    await discord_msg.edit(content=current_chunk)
+                                last_edit_time = time.time()
+                        elif parsed.get("type") == "result":
+                            pass
+                        elif parsed.get("session_id"):
+                            db.set_thread_session(channel_id, parsed.get("session_id"))
+                    except json.JSONDecodeError:
+                        pass
+
+                # Flush remaining
+                if discord_msg and current_chunk:
+                    if len(current_chunk) > self.max_response_length:
+                        await discord_msg.edit(content=current_chunk[:self.max_response_length])
+                        await self.send_long_message(channel, current_chunk[self.max_response_length:])
+                    else:
+                        await discord_msg.edit(content=current_chunk)
+
+                await process.wait()
+                stderr_output = await process.stderr.read()
+                error = stderr_output.decode().strip()
+
                 if not final_response:
-                    final_response = "Gemini completed but returned no output."
+                    if error:
+                        final_response = f"Error: {error}"
+                        if discord_msg:
+                            await discord_msg.edit(content=final_response)
+                    else:
+                        final_response = "Gemini completed but returned no output."
+
             except asyncio.TimeoutError:
                 try:
                     process.kill()
                 except Exception:
                     pass
                 final_response = f"Error: Gemini command timed out after {timeout_seconds} seconds."
+                if discord_msg:
+                    try:
+                        await discord_msg.edit(content=final_response)
+                    except:
+                        pass
 
             db.update_message_status(msg_id_db, 'completed', final_response)
             
             if channel:
-                # Skip mentioning if author is the bot itself (cronjob)
-                reply_author_id = author_id if author_id != str(self.user.id) else None
-                await self.send_long_message(channel, final_response, reply_author_id)
+                if not streamed and final_response:
+                    reply_author_id = author_id if author_id != str(self.user.id) else None
+                    await self.send_long_message(channel, final_response, reply_author_id)
                 db.update_message_status(msg_id_db, 'delivered')
 
         except Exception as e:
