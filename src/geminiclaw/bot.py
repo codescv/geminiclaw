@@ -87,10 +87,10 @@ class GeminiClawBot(commands.Bot):
                     process.kill()
                 except Exception:
                     pass
-            
         except Exception as e:
-            print(f"Failed to generate thread summary: {e}")
+            pass
         
+        print(f"Failed to generate thread summary, fallback to using prompt")
         clean = " ".join(prompt.splitlines()).strip()
         return clean[:30] if len(clean) > 30 else clean
 
