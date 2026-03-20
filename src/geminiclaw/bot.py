@@ -142,14 +142,16 @@ class GeminiClawBot(commands.Bot):
 
     async def on_message(self, message):
         if message.author == self.user:
+            # don't answer myself
             return
 
         if message.content.endswith(" (incomplete)"):
+            # don't answer incomplete messages
             return
 
         is_thread = isinstance(message.channel, discord.Thread)
         is_dm = isinstance(message.channel, discord.DMChannel)
-        is_bot_mentioned = self.user.mentioned_in(message) or is_dm
+        is_bot_mentioned = self.user.mentioned_in(message)
 
         if message.content.strip().lower() == "-stop":
             if is_thread:
@@ -171,21 +173,21 @@ class GeminiClawBot(commands.Bot):
 
         should_reply = False
 
-        if is_bot_mentioned:
+        if is_bot_mentioned or is_dm:
             print('Replying to a mentioned thread')
             should_reply = True
             if is_thread:
                 db.set_thread_active(message.channel.id, True)
         elif is_thread:
-            if db.is_thread_active(message.channel.id):
+            if message.mentions:
+                print('Message has mentions but not for me, ignoring:', message.content[:50])
+            elif db.is_thread_active(message.channel.id):
                 print('Replying to an active thread')
                 should_reply = True
             elif not db.has_thread(message.channel.id):
                 try:
                     starter_msg = await message.channel.parent.fetch_message(message.channel.id)
                     if self.user.mentioned_in(starter_msg):
-                        # this should happen very rarely
-                        print("The thread is created when I'm offline, recreating it in database.")
                         db.set_thread_active(message.channel.id, True)
                         should_reply = True
                 except Exception as e:
@@ -194,60 +196,68 @@ class GeminiClawBot(commands.Bot):
                 # otherwise, the thread has been marked as inactive (possbily by -stop)
                 print("Thread inactive, stop replying.")
 
-        if should_reply:
-            prompt = message.content.replace(f'<@{self.user.id}>', '').replace(f'<@!{self.user.id}>', '').strip()
-            if not prompt and not message.attachments:
-                return
+        if not should_reply:
+            # early return
+            return
 
-            print(f"Received prompt: {prompt} from {message.author}")
-            
-            target_channel_id = message.channel.id
+        # replace mentions with display names, so that bots knows their identity referered in the message
+        prompt = message.content
+        for user in message.mentions:
+            prompt = prompt.replace(f'<@{user.id}>', f'@{user.display_name}').replace(f'<@!{user.id}>', f'@{user.display_name}')
+        prompt = prompt.strip()
+        
+        if not prompt and not message.attachments:
+            return
 
-            if not is_thread and not is_dm:
+        print(f"Received prompt: {prompt} from {message.author}")
+        
+        target_channel_id = message.channel.id
+
+        if not is_thread and not is_dm:
+            try:
+                thread_name = await self.generate_thread_summary(prompt if prompt else "Attachment")
+                thread = await message.create_thread(name=thread_name)
+                target_channel_id = thread.id
+                db.set_thread_active(thread.id, True)
+                print(f"Created thread {thread_name} ({thread.id})")
+            except Exception as e:
+                print(f"Failed to create thread: {e}")
                 try:
-                    thread_name = await self.generate_thread_summary(prompt if prompt else "Attachment")
-                    thread = await message.create_thread(name=thread_name)
-                    target_channel_id = thread.id
-                    db.set_thread_active(thread.id, True)
-                    print(f"Created thread {thread_name} ({thread.id})")
-                except Exception as e:
-                    print(f"Failed to create thread: {e}")
-                    try:
-                        existing_thread = message.channel.get_thread(message.id)
-                        if not existing_thread and message.guild:
-                            existing_thread = await message.guild.fetch_channel(message.id)
-                        
-                        if existing_thread:
-                            target_channel_id = existing_thread.id
-                            db.set_thread_active(target_channel_id, True)
-                            print(f"Joined existing thread ({target_channel_id})")
-                    except Exception as fetch_error:
-                        print(f"Failed to fetch existing thread: {fetch_error}")
+                    existing_thread = message.channel.get_thread(message.id)
+                    if not existing_thread and message.guild:
+                        existing_thread = await message.guild.fetch_channel(message.id)
+                    
+                    if existing_thread:
+                        target_channel_id = existing_thread.id
+                        db.set_thread_active(target_channel_id, True)
+                        print(f"Joined existing thread ({target_channel_id})")
+                except Exception as fetch_error:
+                    print(f"Failed to fetch existing thread: {fetch_error}")
 
-            attachments_paths = []
-            if message.attachments:
-                cwd = self.gemini_config.get('workspace', '.')
-                attachments_dir = self.gemini_config.get('attachments_dir', 'attachments')
-                if not os.path.isabs(attachments_dir):
-                    attachments_dir = os.path.join(cwd, attachments_dir)
-                try:
-                    os.makedirs(attachments_dir, exist_ok=True)
-                    for attachment in message.attachments:
-                        safe_name = f"{message.id}_{attachment.filename}"
-                        filepath = os.path.join(attachments_dir, safe_name)
-                        await attachment.save(filepath)
-                        if filepath.startswith(os.path.abspath(cwd)):
-                            rel_path = os.path.relpath(filepath, cwd)
-                        else:
-                            rel_path = filepath
-                        attachments_paths.append(rel_path)
-                    print(f"Downloaded {len(attachments_paths)} attachments to {attachments_dir}")
-                except Exception as e:
-                    print(f"Failed to download attachments: {e}")
+        attachments_paths = []
+        if message.attachments:
+            cwd = self.gemini_config.get('workspace', '.')
+            attachments_dir = self.gemini_config.get('attachments_dir', 'attachments')
+            if not os.path.isabs(attachments_dir):
+                attachments_dir = os.path.join(cwd, attachments_dir)
+            try:
+                os.makedirs(attachments_dir, exist_ok=True)
+                for attachment in message.attachments:
+                    safe_name = f"{message.id}_{attachment.filename}"
+                    filepath = os.path.join(attachments_dir, safe_name)
+                    await attachment.save(filepath)
+                    if filepath.startswith(os.path.abspath(cwd)):
+                        rel_path = os.path.relpath(filepath, cwd)
+                    else:
+                        rel_path = filepath
+                    attachments_paths.append(rel_path)
+                print(f"Downloaded {len(attachments_paths)} attachments to {attachments_dir}")
+            except Exception as e:
+                print(f"Failed to download attachments: {e}")
 
-            attachments_json = json.dumps(attachments_paths) if attachments_paths else None
-            db.insert_message(target_channel_id, message.id, message.author.id, prompt, attachments=attachments_json)
-            await message.add_reaction('✅')
+        attachments_json = json.dumps(attachments_paths) if attachments_paths else None
+        db.insert_message(target_channel_id, message.id, message.author.id, prompt, attachments=attachments_json)
+        await message.add_reaction('✅')
 
     async def send_long_message(self, channel, content, author_id=None):
         if not content:
@@ -315,8 +325,9 @@ class GeminiClawBot(commands.Bot):
             try:
                 channel = await self.fetch_channel(channel_id)
             except Exception:
-                print(f"Could not fetch channel {channel_id}")
-                channel = None
+                print(f"Could not fetch channel {channel_id}, skipping message.")
+                db.update_message_status(msg_id_db, 'failed', 'Channel not found or deleted')
+                return
 
         system_prompt_path = None
         try:
@@ -362,24 +373,23 @@ class GeminiClawBot(commands.Bot):
                 prompt = f"{author_name}: {prompt}"
             args.extend(['-p', prompt])
 
-            print('args:', args)
-            
-            system_prompt_content = f"Identity: You are {self.user.name}."
+            system_prompt_content = f'Identity: Your name is <@{self.user.name}>.'
 
-            if channel:
-                topic = None
-                if isinstance(channel, discord.Thread):
-                    if hasattr(channel.parent, 'topic'):
-                        topic = channel.parent.topic
-                elif isinstance(channel, discord.TextChannel):
-                    topic = channel.topic
-                
-                if topic and topic.strip():
-                    system_prompt_content += f"\n{topic.strip()}"
+            topic = None
+            if isinstance(channel, discord.Thread):
+                if hasattr(channel.parent, 'topic'):
+                    topic = channel.parent.topic
+            elif isinstance(channel, discord.TextChannel):
+                topic = channel.topic
             
-            system_prompt_path = f"/tmp/gemini_system_{channel_id}.md"
+            if topic and topic.strip():
+                system_prompt_content += f"\nInstructions: {topic.strip()}"
+            
+            print(f"system prompt:\n{system_prompt_content}")
+            print('prompt:', prompt[:120], f'...{len(prompt)} chars' if len(prompt) > 120 else '')
+
+            system_prompt_path = f"/tmp/gemini_system_{channel_id}_{self.user.id}.md"
             with open(system_prompt_path, "w") as f:
-                print(f"system prompt: {system_prompt_content}")
                 f.write(system_prompt_content)
             
             env = os.environ.copy()
@@ -408,55 +418,67 @@ class GeminiClawBot(commands.Bot):
                 last_edit_time = time.time()
                 edit_interval = 1.0
                 streamed = False
+                
+                reply_author_id = author_id if author_id != str(self.user.id) else None
+                prefix = f"<@{reply_author_id}>\n" if reply_author_id else ""
+                is_first_chunk = True
 
-                if channel:
-                    try:
-                        reply_author_id = author_id if author_id != str(self.user.id) else None
-                        prefix = f"<@{reply_author_id}> " if reply_author_id else ""
-                        discord_msg = await channel.send(f"{prefix}*Thinking...* (incomplete)")
-                        streamed = True
-                    except Exception as e:
-                        print(f"Failed to send initial message: {e}")
+                async def read_stream():
+                    nonlocal current_chunk, final_response, discord_msg, last_edit_time, streamed, is_first_chunk
+                    while True:
+                        line = await asyncio.wait_for(process.stdout.readline(), timeout=timeout_seconds)
+                        if not line:
+                            break
+                        
+                        line_str = line.decode().strip()
+                        if not line_str:
+                            continue
 
-                while True:
-                    line = await asyncio.wait_for(process.stdout.readline(), timeout=timeout_seconds)
-                    if not line:
-                        break
-                    
-                    line_str = line.decode().strip()
-                    if not line_str:
-                        continue
+                        try:
+                            parsed = json.loads(line_str)
+                            if parsed.get("type") == "message" and parsed.get("role") == "assistant":
+                                content = parsed.get("content", "")
+                                current_chunk += content
+                                final_response += content
 
-                    try:
-                        parsed = json.loads(line_str)
-                        if parsed.get("type") == "message" and parsed.get("role") == "assistant":
-                            content = parsed.get("content", "")
-                            current_chunk += content
-                            final_response += content
-
-                            if discord_msg and time.time() - last_edit_time > edit_interval:
-                                if len(current_chunk) > self.max_response_length:
-                                    await discord_msg.edit(content=current_chunk[:self.max_response_length])
-                                    residue = current_chunk[self.max_response_length:]
-                                    discord_msg = await channel.send(residue + " (incomplete)")
-                                    current_chunk = residue
-                                else:
-                                    await discord_msg.edit(content=current_chunk + " (incomplete)")
-                                last_edit_time = time.time()
-                        elif parsed.get("type") == "result":
+                                if time.time() - last_edit_time > edit_interval:
+                                    if discord_msg:
+                                        if len(current_chunk) > self.max_response_length:
+                                            final_text = prefix + current_chunk[:self.max_response_length] if is_first_chunk else current_chunk[:self.max_response_length]
+                                            await discord_msg.edit(content=final_text)
+                                            is_first_chunk = False
+                                            
+                                            residue = current_chunk[self.max_response_length:]
+                                            discord_msg = await channel.send(residue + " (incomplete)")
+                                            current_chunk = residue
+                                        else:
+                                            await discord_msg.edit(content=current_chunk + " (incomplete)")
+                                    else:
+                                        discord_msg = await channel.send(current_chunk + " (incomplete)")
+                                        streamed = True
+                                        
+                                    last_edit_time = time.time()
+                            elif parsed.get("type") == "result":
+                                pass
+                            elif parsed.get("session_id"):
+                                db.set_thread_session(channel_id, parsed.get("session_id"))
+                        except json.JSONDecodeError:
                             pass
-                        elif parsed.get("session_id"):
-                            db.set_thread_session(channel_id, parsed.get("session_id"))
-                    except json.JSONDecodeError:
-                        pass
+                
+                # use typing to indicate message still writing
+                async with channel.typing():
+                    await read_stream()
 
                 # Flush remaining
                 if discord_msg and current_chunk:
                     if len(current_chunk) > self.max_response_length:
-                        await discord_msg.edit(content=current_chunk[:self.max_response_length])
+                        final_text = prefix + current_chunk[:self.max_response_length] if is_first_chunk else current_chunk[:self.max_response_length]
+                        await discord_msg.edit(content=final_text)
+                        is_first_chunk = False
                         await self.send_long_message(channel, current_chunk[self.max_response_length:])
                     else:
-                        await discord_msg.edit(content=current_chunk)
+                        final_text = prefix + current_chunk if is_first_chunk else current_chunk
+                        await discord_msg.edit(content=final_text)
 
                 await process.wait()
                 stderr_output = await process.stderr.read()
@@ -484,11 +506,10 @@ class GeminiClawBot(commands.Bot):
 
             db.update_message_status(msg_id_db, 'completed', final_response)
             
-            if channel:
-                if not streamed and final_response:
-                    reply_author_id = author_id if author_id != str(self.user.id) else None
-                    await self.send_long_message(channel, final_response, reply_author_id)
-                db.update_message_status(msg_id_db, 'delivered')
+            if not streamed and final_response:
+                reply_author_id = author_id if author_id != str(self.user.id) else None
+                await self.send_long_message(channel, final_response, reply_author_id)
+            db.update_message_status(msg_id_db, 'delivered')
 
         except Exception as e:
             print(f"Error processing message {msg_id_db}: {e}")
