@@ -176,6 +176,17 @@ class GeminiClawBot(commands.Bot):
                     print(f"Created thread {thread_name} ({thread.id})")
                 except Exception as e:
                     print(f"Failed to create thread: {e}")
+                    try:
+                        existing_thread = message.channel.get_thread(message.id)
+                        if not existing_thread and message.guild:
+                            existing_thread = await message.guild.fetch_channel(message.id)
+                        
+                        if existing_thread:
+                            target_channel_id = existing_thread.id
+                            db.set_thread_active(target_channel_id, True)
+                            print(f"Joined existing thread ({target_channel_id})")
+                    except Exception as fetch_error:
+                        print(f"Failed to fetch existing thread: {fetch_error}")
 
             attachments_paths = []
             if message.attachments:
