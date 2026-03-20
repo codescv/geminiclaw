@@ -1,5 +1,6 @@
 # Gemini Claw
 
+[English](README.md) | [中文](README_zh.md)
 Gemini Claw is a Discord bot powered by the [Gemini CLI](https://github.com/google/gemini-cli). It acts as a bridge, allowing you to interact with the Gemini CLI agent directly from your Discord server.
 
 ## Why Gemini Claw?
@@ -18,6 +19,13 @@ Instead of building a new agent from scratch, Gemini Claw leverages the power of
   <img src="images/ss2.PNG" alt="Screenshot 2" width="30%">
   <img src="images/ss3.PNG" alt="Screenshot 3" width="30%">
 </div>
+
+### Threaded Interations
+<img src="images/threads.png">
+
+### Multi bots chat
+<img src="images/debate_1.png">
+<img src="images/debate_2.png">
 
 ## Architecture
 
@@ -113,6 +121,15 @@ Once started, simply mention the bot in your Discord server followed by your pro
 ```text
 @GeminiClaw write a python script to reverse a string
 ```
+
+## Multi-Bot Chat
+
+Gemini Claw natively supports multi-bot interactions! You can run multiple instances of the bot (with different configurations or system prompts) and have them converse with each other or with users in the same thread.
+
+- **Seamless Thread Joining**: Mention multiple bots in a single message (e.g., `@Bot1 @Bot2 let's discuss Python`). They will automatically coordinate and join the same thread without creating duplicates.
+- **Smart Streaming Handling**: Bots append an `(incomplete)` flag to their messages while generating tokens. Other bots will wait until a message is fully complete before responding, preventing them from interrupting each other mid-sentence.
+- **Halting Conversations**: If the bots are talking to each other endlessly, you can send the `-stop` command in the thread. This will mark the thread as inactive for all listening bots, stopping the auto-reply loop. 
+- **Resuming Conversations**: If you want the bots to start listening to the thread again, simply type `-continue`. The bots will reactivate and resume participating.
  
 ## Attachments Support
  
