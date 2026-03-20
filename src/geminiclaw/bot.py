@@ -172,22 +172,27 @@ class GeminiClawBot(commands.Bot):
             return
 
         should_reply = False
+        is_new_thread_participant = False
 
         if is_bot_mentioned or is_dm:
             print('Replying to a mentioned thread')
             should_reply = True
             if is_thread:
+                if not db.has_thread(message.channel.id):
+                    is_new_thread_participant = True
                 db.set_thread_active(message.channel.id, True)
         elif is_thread:
-            if message.mentions:
-                print('Message has mentions but not for me, ignoring:', message.content[:50])
-            elif db.is_thread_active(message.channel.id):
+            if db.is_thread_active(message.channel.id):
                 print('Replying to an active thread')
                 should_reply = True
             elif not db.has_thread(message.channel.id):
                 try:
                     starter_msg = await message.channel.parent.fetch_message(message.channel.id)
                     if self.user.mentioned_in(starter_msg):
+                        # this only happens when the bot is offline when the thread is created
+                        # a fallback to recover the thread state if the bot crashes or restarts
+                        print(f'Recovering thread state for thread {message.channel.id}')
+                        is_new_thread_participant = True
                         db.set_thread_active(message.channel.id, True)
                         should_reply = True
                 except Exception as e:
@@ -205,11 +210,38 @@ class GeminiClawBot(commands.Bot):
         for user in message.mentions:
             prompt = prompt.replace(f'<@{user.id}>', f'@{user.display_name}').replace(f'<@!{user.id}>', f'@{user.display_name}')
         prompt = prompt.strip()
+
+        if is_new_thread_participant:
+            print(f"Fetching history for newly joined thread {message.channel.id}")
+            history_text = ""
+            try:
+                # fetch last 20 messages to provide context
+                async for msg in message.channel.history(limit=20, before=message):
+                    # NOTE: the msg is in reverse time order
+                    content = msg.clean_content.strip()
+                    if content:
+                        history_text = f"{msg.author.display_name}: {content}\n" + history_text
+                # Try to fetch the starter message from the parent channel
+                if hasattr(message.channel, 'parent') and message.channel.parent:
+                    try:
+                        starter_msg = await message.channel.parent.fetch_message(message.channel.id)
+                        # Ensure we don't accidentally duplicate if it was yielded by history
+                        if starter_msg and starter_msg.id != message.id:
+                            content = starter_msg.clean_content.strip()
+                            if content and not history_text.startswith(f"{starter_msg.author.display_name}: {content}"):
+                                history_text = f"{starter_msg.author.display_name}: {content}\n" + history_text
+                    except Exception as e:
+                        pass
+                
+                if history_text:
+                    prompt = f"[Previous Context]\n{history_text.strip()}\n\n[Current Message]\n{prompt}"
+            except Exception as e:
+                print(f"Error fetching history: {e}")
         
         if not prompt and not message.attachments:
             return
 
-        print(f"Received prompt: {prompt} from {message.author}")
+        print(f"Received prompt: {prompt[:120]} from {message.author}")
         
         target_channel_id = message.channel.id
 
@@ -304,7 +336,7 @@ class GeminiClawBot(commands.Bot):
         attachments_json = row['attachments'] if 'attachments' in row.keys() else None
 
         db.update_message_status(msg_id_db, 'processing')
-        print(f"Processing message {msg_id_db}: {prompt}")
+        print(f"Processing message {msg_id_db}: {prompt[:120]}")
         
         attachments = []
         if attachments_json:
@@ -370,7 +402,9 @@ class GeminiClawBot(commands.Bot):
             author_name = author.display_name if author else f"<@{author_id}>"
 
             if author_id != str(self.user.id):
-                prompt = f"{author_name}: {prompt}"
+                if not prompt.startswith('[Previous Context]'):
+                    # For history populated messages, no need to add author in the beginning
+                    prompt = f"{author_name}: {prompt}"
             args.extend(['-p', prompt])
 
             system_prompt_content = f'Identity: Your name is <@{self.user.name}>.'
