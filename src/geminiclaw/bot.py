@@ -132,13 +132,33 @@ class GeminiClawBot(commands.Bot):
         except Exception as e:
             print(f"Error running cronjob {prompt_file}: {e}")
 
+    async def on_message_edit(self, before, after):
+        if after.author == self.user:
+            return
+
+        # Check if a bot message just finished streaming
+        if before.content.endswith(" (incomplete)") and not after.content.endswith(" (incomplete)"):
+            await self.on_message(after)
+
     async def on_message(self, message):
         if message.author == self.user:
+            return
+
+        if message.content.endswith(" (incomplete)"):
             return
 
         is_thread = isinstance(message.channel, discord.Thread)
         is_dm = isinstance(message.channel, discord.DMChannel)
         is_bot_mentioned = self.user.mentioned_in(message) or is_dm
+
+        if message.content.strip().lower() == "-stop":
+            if is_thread:
+                db.set_thread_active(message.channel.id, False)
+                try:
+                    await message.add_reaction("🛑")
+                except Exception:
+                    pass
+            return
 
         should_reply = False
 
@@ -377,7 +397,7 @@ class GeminiClawBot(commands.Bot):
                     try:
                         reply_author_id = author_id if author_id != str(self.user.id) else None
                         prefix = f"<@{reply_author_id}> " if reply_author_id else ""
-                        discord_msg = await channel.send(f"{prefix}*Thinking...*")
+                        discord_msg = await channel.send(f"{prefix}*Thinking...* (incomplete)")
                         streamed = True
                     except Exception as e:
                         print(f"Failed to send initial message: {e}")
@@ -402,10 +422,10 @@ class GeminiClawBot(commands.Bot):
                                 if len(current_chunk) > self.max_response_length:
                                     await discord_msg.edit(content=current_chunk[:self.max_response_length])
                                     residue = current_chunk[self.max_response_length:]
-                                    discord_msg = await channel.send(residue)
+                                    discord_msg = await channel.send(residue + " (incomplete)")
                                     current_chunk = residue
                                 else:
-                                    await discord_msg.edit(content=current_chunk)
+                                    await discord_msg.edit(content=current_chunk + " (incomplete)")
                                 last_edit_time = time.time()
                         elif parsed.get("type") == "result":
                             pass
