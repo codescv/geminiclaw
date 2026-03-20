@@ -160,23 +160,39 @@ class GeminiClawBot(commands.Bot):
                     pass
             return
 
+        if message.content.strip().lower() == "-continue":
+            if is_thread:
+                db.set_thread_active(message.channel.id, True)
+                try:
+                    await message.add_reaction("▶️")
+                except Exception:
+                    pass
+            return
+
         should_reply = False
 
         if is_bot_mentioned:
+            print('Replying to a mentioned thread')
             should_reply = True
             if is_thread:
                 db.set_thread_active(message.channel.id, True)
         elif is_thread:
             if db.is_thread_active(message.channel.id):
+                print('Replying to an active thread')
                 should_reply = True
-            else:
+            elif not db.has_thread(message.channel.id):
                 try:
                     starter_msg = await message.channel.parent.fetch_message(message.channel.id)
                     if self.user.mentioned_in(starter_msg):
+                        # this should happen very rarely
+                        print("The thread is created when I'm offline, recreating it in database.")
                         db.set_thread_active(message.channel.id, True)
                         should_reply = True
                 except Exception as e:
                     print(f"Error fetching starter message: {e}")
+            else:
+                # otherwise, the thread has been marked as inactive (possbily by -stop)
+                print("Thread inactive, stop replying.")
 
         if should_reply:
             prompt = message.content.replace(f'<@{self.user.id}>', '').replace(f'<@!{self.user.id}>', '').strip()

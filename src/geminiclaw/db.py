@@ -86,6 +86,14 @@ def is_thread_active(thread_id):
         return bool(row['is_active'])
     return False
 
+def has_thread(thread_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM threads WHERE thread_id = ?", (str(thread_id),))
+    row = cursor.fetchone()
+    conn.close()
+    return row is not None
+
 def set_thread_active(thread_id, active=True):
     conn = get_db_connection()
     cursor = conn.cursor()
