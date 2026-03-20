@@ -180,7 +180,7 @@ class GeminiClawBot(commands.Bot):
         is_new_thread_participant = False
 
         if is_bot_mentioned or is_dm:
-            print('Replying to a mentioned thread')
+            print('Replying to a mentioned message')
             should_reply = True
             if is_thread:
                 if not db.has_thread(message.channel.id):
@@ -188,8 +188,11 @@ class GeminiClawBot(commands.Bot):
                 db.set_thread_active(message.channel.id, True)
         elif is_thread:
             if db.is_thread_active(message.channel.id):
-                print('Replying to an active thread')
-                should_reply = True
+                if message.mentions:
+                    print('Skpping message explicitly mentioning others in active thread')
+                else:
+                    print('Replying to an active thread')
+                    should_reply = True
             elif not db.has_thread(message.channel.id):
                 try:
                     starter_msg = await message.channel.parent.fetch_message(message.channel.id)
@@ -246,11 +249,12 @@ class GeminiClawBot(commands.Bot):
         if not prompt and not message.attachments:
             return
 
-        print(f"Received prompt: {prompt[:120]} from {message.author}")
+        print(f"====Received prompt: {prompt[:120]} from {message.author}\n====")
         
         target_channel_id = message.channel.id
 
         if not is_thread and not is_dm:
+            # Create a thread for the first message
             try:
                 thread_name = await self.generate_thread_summary(prompt if prompt else "Attachment")
                 thread = await message.create_thread(name=thread_name)
@@ -341,7 +345,7 @@ class GeminiClawBot(commands.Bot):
         attachments_json = row['attachments'] if 'attachments' in row.keys() else None
 
         db.update_message_status(msg_id_db, 'processing')
-        print(f"Processing message {msg_id_db}: {prompt[:120]}")
+        print(f"====Processing message {msg_id_db}: {prompt[:120]}\n====")
         
         attachments = []
         if attachments_json:
@@ -424,8 +428,9 @@ class GeminiClawBot(commands.Bot):
             if topic and topic.strip():
                 system_prompt_content += f"\nInstructions: {topic.strip()}"
             
-            print(f"system prompt:\n{system_prompt_content}")
-            print('prompt:', prompt[:120], f'...{len(prompt)} chars' if len(prompt) > 120 else '')
+            print(f"====system prompt:\n{system_prompt_content}")
+            print('====prompt:', prompt[:120], f'...{len(prompt)} chars' if len(prompt) > 120 else '')
+            print('====')
 
             system_prompt_path = f"/tmp/gemini_system_{channel_id}_{self.user.id}.md"
             with open(system_prompt_path, "w") as f:
@@ -458,7 +463,15 @@ class GeminiClawBot(commands.Bot):
                 edit_interval = 1.0
                 streamed = False
                 
-                reply_author_id = author_id if author_id != str(self.user.id) else None
+                starter_author_id = None
+                if channel and isinstance(channel, discord.Thread):
+                    try:
+                        starter_msg = await channel.parent.fetch_message(channel.id)
+                        starter_author_id = str(starter_msg.author.id)
+                    except Exception:
+                        pass
+                
+                reply_author_id = author_id if (author_id != str(self.user.id) and author_id != starter_author_id) else None
                 prefix = f"<@{reply_author_id}>\n" if reply_author_id else ""
                 is_first_chunk = True
 
