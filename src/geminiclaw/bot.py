@@ -171,6 +171,11 @@ class GeminiClawBot(commands.Bot):
                     pass
             return
 
+        # Explicitly enforce -stop: if it's inactive, ignore all pings until -continue
+        if is_thread and db.has_thread(message.channel.id) and not db.is_thread_active(message.channel.id):
+            print("Thread is deactivated. Ignoring all message until -continue.")
+            return
+
         should_reply = False
         is_new_thread_participant = False
 
