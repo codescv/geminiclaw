@@ -317,6 +317,8 @@ class GeminiClawBot(commands.Bot):
 
             print('args:', args)
             
+            system_prompt_content = f"Identity: You are {self.user.name}."
+
             if channel:
                 topic = None
                 if isinstance(channel, discord.Thread):
@@ -326,10 +328,12 @@ class GeminiClawBot(commands.Bot):
                     topic = channel.topic
                 
                 if topic and topic.strip():
-                    system_prompt_path = f"/tmp/gemini_system_{channel_id}.md"
-                    print(f"Using channel topic as system prompt: {topic.strip()}")
-                    with open(system_prompt_path, "w") as f:
-                        f.write(topic.strip())
+                    system_prompt_content += f"\n{topic.strip()}"
+            
+            system_prompt_path = f"/tmp/gemini_system_{channel_id}.md"
+            with open(system_prompt_path, "w") as f:
+                print(f"system prompt: {system_prompt_content}")
+                f.write(system_prompt_content)
             
             env = os.environ.copy()
             if system_prompt_path:
