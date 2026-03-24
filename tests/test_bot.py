@@ -370,4 +370,64 @@ async def test_process_pending_messages_outbound_attachments(bot_instance):
                     file_sent = True
                     break
             assert file_sent
+@pytest.mark.asyncio
+async def test_stream_sender_streaming_short():
+    from unittest.mock import AsyncMock
+    bot = AsyncMock()
+    bot.max_response_length = 1900
+    channel = AsyncMock()
+    
+    sender = StreamSender(bot, channel)
+    await sender.send("Short stream text")
+    
+    channel.send.assert_called_once_with("Short stream text (incomplete)")
+    assert sender.streamed == True
+    assert sender.msg_to_edit is not None
 
+@pytest.mark.asyncio
+async def test_stream_sender_streaming_long_integration():
+    from unittest.mock import AsyncMock
+    bot = AsyncMock()
+    bot.max_response_length = 10
+    channel = AsyncMock()
+    
+    sender = StreamSender(bot, channel)
+    await sender.send("Short") # 5 chars
+    channel.send.assert_called_once_with("Short (incomplete)")
+    
+    # Set msg_to_edit to mock
+    msg_to_edit = AsyncMock()
+    sender.msg_to_edit = msg_to_edit
+    
+    await sender.send("OverflowText") # Total 5 + 12 = 17 chars > 10
+    msg_to_edit.edit.assert_called_once_with(content="ShortOverf")
+    channel.send.assert_called_with("lowText (incomplete)")
+    assert sender.current_chunk == "lowText"
+
+@pytest.mark.asyncio
+async def test_stream_sender_non_streaming_short():
+    from unittest.mock import AsyncMock
+    bot = AsyncMock()
+    bot.max_response_length = 1900
+    channel = AsyncMock()
+    
+    sender = StreamSender(bot, channel)
+    await sender.send("Short static text", flush=True)
+    
+    channel.send.assert_called_once_with("Short static text")
+    assert sender.streamed == False
+    assert sender.msg_to_edit is None
+
+@pytest.mark.asyncio
+async def test_stream_sender_non_streaming_long():
+    from unittest.mock import AsyncMock
+    bot = AsyncMock()
+    bot.max_response_length = 10
+    channel = AsyncMock()
+    
+    sender = StreamSender(bot, channel)
+    await sender.send("Over flow text here", flush=True) 
+    
+    assert channel.send.call_count == 2
+    channel.send.assert_any_call("Over flow ")
+    channel.send.assert_any_call("text here")

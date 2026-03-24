@@ -55,9 +55,8 @@ class StreamSender:
                 self.is_first_chunk = False
                 
                 # Use smart chunks for residue (it might still be huge, so split it further)
-                self.msg_to_edit = await self.send_smart_chunks(residue, incomplete=not flush)
-                if flush:
-                    self.current_chunk = ""
+                self.msg_to_edit, last_text = await self.send_smart_chunks(residue, incomplete=not flush)
+                self.current_chunk = "" if flush else last_text # Keep exactly what was sent in the last message!
             else:
                 # Fits in one message! Just edit it.
                 suffix = "" if flush else " (incomplete)"
@@ -99,7 +98,7 @@ class StreamSender:
                 
         if current_chunk:
             last_msg = await self._send_chunk_impl(current_chunk, is_last=True, incomplete=incomplete)
-        return last_msg
+        return last_msg, current_chunk
 
     async def _send_chunk_impl(self, chunk, is_last=False, incomplete=False):
         """Sends a single chunk of text to Discord and returns the message object."""
