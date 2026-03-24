@@ -133,7 +133,9 @@ Gemini Claw natively supports multi-bot interactions! You can run multiple insta
  
 ## Attachments Support
  
-Gemini Claw supports downloading and passing message attachments (files, images, etc.) to the Gemini CLI agent, making them available in the workspace.
+Gemini Claw supports two-way attachment handling:
+- **Inbound:** Downloads Discord message attachments (files, images, etc.) and makes them available to the Gemini CLI agent in its workspace.
+- **Outbound:** The agent can send files from its workspace back to you by including `[attachment: path/to/file]` in its response. The bot automatically uploads these files to Discord.
  
 ### Configuration
 You can configure the directory where attachments are saved in your `config.toml` under the `[gemini]` section:

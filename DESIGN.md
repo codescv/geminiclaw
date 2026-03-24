@@ -42,9 +42,10 @@ Inbound Channels (e.g. Discord) -> SQLite Database -> Polling loop (Python async
 - These commands act as entry points that spawn the respective Python utility functions in `src/geminiclaw/cli.py` to keep the heavy lifting in Python.
  
 **5. Attachments Handling**
-- **Download**: Any file attached to a message mentioning the bot is downloaded to a configurable directory (e.g., inside the workspace).
+- **Inbound (Download)**: Any file attached to a message mentioning the bot is downloaded to a configurable directory (e.g., inside the workspace).
 - **Prompt Enrichment**: The bot appends an `Attachments:` list to the prompt, referencing the downloaded files (e.g., `- attachments/message_id_filename.ext`). This informs the agent about availability.
 - **Agent Access**: Since files are in the workspace or included via `--include-directories`, the Gemini CLI agent can access them using its tools (like reading files).
+- **Outbound (Transmission)**: The agent can send files back to the user by including the syntax `[attachment: path/to/file]` in its response. The bot extracts these paths from the final response, verifies the files exist within the workspace, and securely uploads them as Discord attachments in a subsequent message.
  
 **6. Cronjobs Management**
 - **Triggering**: Periodically triggers based on `cron` schedule expressions using `apscheduler`.

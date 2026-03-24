@@ -7,6 +7,7 @@ import discord
 from discord.ext import tasks, commands
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import time
+import re
 from apscheduler.triggers.cron import CronTrigger
 from . import db
 from .config import Config
@@ -416,7 +417,8 @@ class GeminiClawBot(commands.Bot):
                     prompt = f"{author_name}: {prompt}"
             args.extend(['-p', prompt])
 
-            system_prompt_content = f'Identity: Your name is <@{self.user.name}>.'
+            system_prompt_content = f'Identity: Your name is <@{self.user.name}>.\n'
+            system_prompt_content += 'If you want to send a file to the user as an attachment, use the exact syntax: [attachment: path/to/file]. The bot will extract this tag and upload the file to Discord.'
 
             topic = None
             if isinstance(channel, discord.Thread):
@@ -494,19 +496,22 @@ class GeminiClawBot(commands.Bot):
                                 final_response += content
 
                                 if time.time() - last_edit_time > edit_interval:
+                                    clean_chunk = re.sub(r'\[attachment:\s*.*?\]', '', current_chunk)
                                     if discord_msg:
-                                        if len(current_chunk) > self.max_response_length:
-                                            final_text = prefix + current_chunk[:self.max_response_length] if is_first_chunk else current_chunk[:self.max_response_length]
+                                        if len(clean_chunk) > self.max_response_length:
+                                            final_text = prefix + clean_chunk[:self.max_response_length] if is_first_chunk else clean_chunk[:self.max_response_length]
                                             await discord_msg.edit(content=final_text)
                                             is_first_chunk = False
                                             
                                             residue = current_chunk[self.max_response_length:]
-                                            discord_msg = await channel.send(residue + " (incomplete)")
+                                            clean_residue = re.sub(r'\[attachment:\s*.*?\]', '', residue)
+                                            discord_msg = await channel.send(clean_residue + " (incomplete)")
                                             current_chunk = residue
                                         else:
-                                            await discord_msg.edit(content=current_chunk + " (incomplete)")
+                                            await discord_msg.edit(content=clean_chunk + " (incomplete)")
                                     else:
-                                        discord_msg = await channel.send(current_chunk + " (incomplete)")
+                                        clean_residue = re.sub(r'\[attachment:\s*.*?\]', '', current_chunk)
+                                        discord_msg = await channel.send(clean_residue + " (incomplete)")
                                         streamed = True
                                         
                                     last_edit_time = time.time()
@@ -523,13 +528,15 @@ class GeminiClawBot(commands.Bot):
 
                 # Flush remaining
                 if discord_msg and current_chunk:
-                    if len(current_chunk) > self.max_response_length:
-                        final_text = prefix + current_chunk[:self.max_response_length] if is_first_chunk else current_chunk[:self.max_response_length]
+                    clean_chunk = re.sub(r'\[attachment:\s*.*?\]', '', current_chunk)
+                    if len(clean_chunk) > self.max_response_length:
+                        final_text = prefix + clean_chunk[:self.max_response_length] if is_first_chunk else clean_chunk[:self.max_response_length]
                         await discord_msg.edit(content=final_text)
                         is_first_chunk = False
-                        await self.send_long_message(channel, current_chunk[self.max_response_length:])
+                        clean_long = re.sub(r'\[attachment:\s*.*?\]', '', current_chunk[self.max_response_length:])
+                        await self.send_long_message(channel, clean_long)
                     else:
-                        final_text = prefix + current_chunk if is_first_chunk else current_chunk
+                        final_text = prefix + clean_chunk if is_first_chunk else clean_chunk
                         await discord_msg.edit(content=final_text)
 
                 await process.wait()
@@ -560,7 +567,37 @@ class GeminiClawBot(commands.Bot):
             
             if not streamed and final_response:
                 reply_author_id = author_id if author_id != str(self.user.id) else None
-                await self.send_long_message(channel, final_response, reply_author_id)
+                clean_final = re.sub(r'\[attachment:\s*.*?\]', '', final_response).strip()
+                if clean_final:
+                    await self.send_long_message(channel, clean_final, reply_author_id)
+            
+            # Send attachments
+            outbound_files = []
+            if final_response:
+                for match in re.finditer(r'\[attachment:\s*(.+?)\]', final_response):
+                    path = match.group(1).strip()
+                    full_path = os.path.abspath(os.path.normpath(os.path.join(cwd, path)))
+                    if os.path.isfile(full_path):
+                        if full_path not in outbound_files:
+                            outbound_files.append(full_path)
+
+            if outbound_files:
+                for i in range(0, len(outbound_files), 10):
+                    batch_paths = outbound_files[i:i+10]
+                    discord_files = []
+                    for path in batch_paths:
+                        try:
+                            discord_files.append(discord.File(path))
+                        except Exception as e:
+                            print(f"Error preparing file {path}: {e}")
+                    
+                    if discord_files:
+                        try:
+                            await channel.send("", files=discord_files)
+                        except Exception as e:
+                            print(f"Error sending files: {e}")
+                            await channel.send(f"Failed to send some attachments: {e}")
+
             db.update_message_status(msg_id_db, 'delivered')
 
         except Exception as e:
