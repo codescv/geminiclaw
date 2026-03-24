@@ -7,7 +7,7 @@ import discord
 # Add src to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
-from geminiclaw.bot import GeminiClawBot
+from geminiclaw.bot import GeminiClawBot, StreamSender
 
 @pytest.fixture
 def bot_instance():
@@ -28,7 +28,8 @@ def bot_instance():
 async def test_send_long_message_short(bot_instance):
     channel = AsyncMock()
     content = "Hello world"
-    await bot_instance.send_long_message(channel, content)
+    sender = StreamSender(bot_instance, channel)
+    await sender.send(content, flush=True)
     channel.send.assert_called_once_with("Hello world")
 
 @pytest.mark.asyncio
@@ -39,7 +40,8 @@ async def test_send_long_message_lines_split(bot_instance):
     line2 = "b" * 500
     content = line1 + line2
     
-    await bot_instance.send_long_message(channel, content)
+    sender = StreamSender(bot_instance, channel)
+    await sender.send(content, flush=True)
     
     assert channel.send.call_count == 2
     calls = channel.send.call_args_list
@@ -51,11 +53,13 @@ async def test_send_long_message_hard_split(bot_instance):
     channel = AsyncMock()
     # Create a single line that exceeds max_response_length
     content = "a" * (bot_instance.max_response_length + 10)
-    await bot_instance.send_long_message(channel, content)
+    sender = StreamSender(bot_instance, channel)
+    await sender.send(content, flush=True)
     
-    assert channel.send.call_count == 1
+    assert channel.send.call_count == 2
     calls = channel.send.call_args_list
     assert calls[0][0][0] == "a" * bot_instance.max_response_length
+    assert calls[1][0][0] == "a" * 10
 
 @pytest.mark.asyncio
 async def test_send_long_message_mixed_split(bot_instance):
@@ -68,21 +72,23 @@ async def test_send_long_message_mixed_split(bot_instance):
     line3 = "c" * 100
     
     content = line1 + line2 + line3
-    await bot_instance.send_long_message(channel, content)
+    sender = StreamSender(bot_instance, channel)
+    await sender.send(content, flush=True)
     
     assert channel.send.call_count == 3
     calls = channel.send.call_args_list
     assert calls[0][0][0] == line1
-    # Second call is line2 truncated
     assert calls[1][0][0] == ("b" * (bot_instance.max_response_length + 100) + "\n")[:bot_instance.max_response_length]
-    assert calls[2][0][0] == line3
+    assert calls[2][0][0] == ("b" * 100) + "\n" + line3
 
 @pytest.mark.asyncio
 async def test_send_long_message_with_mention(bot_instance):
     channel = AsyncMock()
     content = "Hello\nWorld"
     author_id = "123"
-    await bot_instance.send_long_message(channel, content, author_id=author_id)
+    prefix = f"<@{author_id}> " if author_id else ""
+    sender = StreamSender(bot_instance, channel, prefix)
+    await sender.send(content, flush=True)
     # Should be sent in one go if it fits
     channel.send.assert_called_once_with(f"<@123> {content}")
 
@@ -95,7 +101,9 @@ async def test_send_long_message_split_with_mention(bot_instance):
     content = line1 + line2
     author_id = "123"
     
-    await bot_instance.send_long_message(channel, content, author_id=author_id)
+    prefix = f"<@{author_id}> " if author_id else ""
+    sender = StreamSender(bot_instance, channel, prefix)
+    await sender.send(content, flush=True)
     
     assert channel.send.call_count == 2
     calls = channel.send.call_args_list
