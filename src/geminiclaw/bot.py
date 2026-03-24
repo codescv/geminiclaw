@@ -120,6 +120,11 @@ class GeminiClawBot(commands.Bot):
         self.max_response_length = max_response_length
         self.scheduler = AsyncIOScheduler()
 
+    @property
+    def cwd(self):
+        """Workspace directory for executing commands."""
+        return self.gemini_config.get('workspace', '.')
+
     async def on_ready(self):
         print(f'Logged in as {self.user.name} ({self.user.id})')
         self.process_pending_messages.start()
@@ -402,9 +407,8 @@ class GeminiClawBot(commands.Bot):
         await message.add_reaction('✅')
 
 
-    async def _prepare_gemini_args(self, prompt, channel_id, author_id, channel):
-        """Prepare command line arguments and environment variables for the Gemini CLI."""
-        cwd = self.gemini_config.get('workspace', '.')
+    async def _execute_gemini_command(self, prompt, channel_id, author_id, channel):
+        """Prepare command line arguments and execute the Gemini CLI as a subprocess."""
         gemini_exec = self.gemini_config.get('executable_path', 'gemini')
         args = [gemini_exec] # Start with the executable path
         
@@ -430,6 +434,7 @@ class GeminiClawBot(commands.Bot):
         attachments_dir = self.gemini_config.get('attachments_dir', 'attachments')
         if os.path.isabs(attachments_dir):
             if attachments_dir not in include_dirs:
+                # make attachments dir accessible from Gemini CLI
                 args.extend(['--include-directories', attachments_dir])
 
         author = None
@@ -473,17 +478,14 @@ class GeminiClawBot(commands.Bot):
             env['GOOGLE_CLOUD_LOCATION'] = self.gemini_config['location']
         env['GEMINI_SYSTEM_MD'] = system_prompt_path
 
-        return args, env, cwd, system_prompt_path
-
-    async def _execute_gemini_command(self, args, env, cwd):
-        """Execute the Gemini CLI command as a subprocess with standard output pipes."""
-        return await asyncio.create_subprocess_exec(
+        process = await asyncio.create_subprocess_exec(
             *args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            cwd=cwd,
+            cwd=self.cwd,
             env=env
         )
+        return process, system_prompt_path
 
     async def _stream_gemini_output(self, process, channel, author_id, msg_id_db, timeout_seconds):
         """Read output stream from Gemini process, send chunks to Discord, and return final response."""
@@ -632,13 +634,11 @@ class GeminiClawBot(commands.Bot):
 
         system_prompt_path = None
         try:
-            args, env, cwd, system_prompt_path = await self._prepare_gemini_args(prompt, row['channel_id'], author_id, channel)
+            process, system_prompt_path = await self._execute_gemini_command(prompt, row['channel_id'], author_id, channel)
             
             print(f"====system prompt file created: {system_prompt_path}")
             print('====prompt:', prompt[:120], f'...{len(prompt)} chars' if len(prompt) > 120 else '')
             print('====')
-            
-            process = await self._execute_gemini_command(args, env, cwd)
             
             timeout_seconds = self.gemini_config.get('timeout', 600)
             final_response = await self._stream_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds)
@@ -646,7 +646,7 @@ class GeminiClawBot(commands.Bot):
             db.update_message_status(msg_id_db, 'completed', final_response)
             
             # Send attachments
-            await self._handle_outbound_attachments(final_response, channel, cwd)
+            await self._handle_outbound_attachments(final_response, channel, self.cwd)
 
             db.update_message_status(msg_id_db, 'delivered')
 
