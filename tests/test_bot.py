@@ -258,3 +258,108 @@ async def test_process_pending_messages_with_attachments(bot_instance):
             assert 'TestUser: Analyze this' in prompt_arg
             assert 'Attachments:' in prompt_arg
             assert '- attachments/file1.txt' in prompt_arg
+
+@pytest.mark.asyncio
+async def test_process_pending_messages_timeout(bot_instance):
+    from unittest.mock import patch, AsyncMock
+    import asyncio
+    
+    with patch('geminiclaw.bot.db') as mock_db:
+        mock_db.get_pending_message.return_value = {
+            'id': 1,
+            'channel_id': '123456',
+            'prompt': 'Hello',
+            'author_id': '789',
+            'status': 'pending'
+        }
+        
+        from unittest.mock import MagicMock
+        channel = AsyncMock()
+        channel.typing = MagicMock(return_value=AsyncMock())
+        bot_instance.get_channel = MagicMock(return_value=channel)
+
+        with patch('asyncio.create_subprocess_exec') as mock_exec:
+            process = AsyncMock()
+            process.stderr.read.return_value = b""
+            mock_exec.return_value = process
+            
+            # Simulate a timeout inside the stream reader loop or during wait
+            with patch('geminiclaw.bot.asyncio.wait_for', side_effect=asyncio.TimeoutError):
+                await bot_instance.process_pending_messages()
+                
+            # Verify status update
+            mock_db.update_message_status.assert_any_call(1, 'completed', 'Error: Gemini command timed out after 600 seconds.')
+
+@pytest.mark.asyncio
+async def test_process_pending_messages_json_error(bot_instance):
+    from unittest.mock import patch, AsyncMock
+    
+    with patch('geminiclaw.bot.db') as mock_db:
+        mock_db.get_pending_message.return_value = {
+            'id': 1,
+            'channel_id': '123456',
+            'prompt': 'Hello',
+            'author_id': '789',
+            'status': 'pending'
+        }
+        
+        from unittest.mock import MagicMock
+        channel = AsyncMock()
+        channel.typing = MagicMock(return_value=AsyncMock())
+        bot_instance.get_channel = MagicMock(return_value=channel)
+
+        with patch('asyncio.create_subprocess_exec') as mock_exec:
+            process = AsyncMock()
+            process.stderr.read.return_value = b""
+            # Set up readline to return an invalid JSON line, then EOF
+            process.stdout.readline.side_effect = [b'invalid json\n', b'']
+            mock_exec.return_value = process
+            
+            await bot_instance.process_pending_messages()
+            
+            # The JSON error is caught and ignored, so it should run to completion
+            mock_db.update_message_status.assert_any_call(1, 'delivered')
+
+@pytest.mark.asyncio
+async def test_process_pending_messages_outbound_attachments(bot_instance):
+    from unittest.mock import patch, AsyncMock
+    
+    with patch('geminiclaw.bot.db') as mock_db:
+        mock_db.get_pending_message.return_value = {
+            'id': 1,
+            'channel_id': '123456',
+            'prompt': 'Hello',
+            'author_id': '789',
+            'status': 'pending'
+        }
+        
+        from unittest.mock import MagicMock
+        channel = AsyncMock()
+        channel.typing = MagicMock(return_value=AsyncMock())
+        bot_instance.get_channel = MagicMock(return_value=channel)
+
+        with patch('asyncio.create_subprocess_exec') as mock_exec:
+            process = AsyncMock()
+            process.stderr.read.return_value = b""
+            # Return valid JSON with attachment tag
+            process.stdout.readline.side_effect = [
+                b'{"type": "message", "role": "assistant", "content": "Here is the file [attachment: output.txt]"}',
+                b''
+            ]
+            mock_exec.return_value = process
+            
+            # Mock os.path.isfile and discord.File to avoid real file access
+            with patch('os.path.isfile', return_value=True), patch('discord.File'):
+                await bot_instance.process_pending_messages()
+                
+            # It should have attempted to send the file to Discord
+            assert channel.send.call_count > 0
+            # Look for file parameter in any call
+            file_sent = False
+            for call in channel.send.call_args_list:
+                kwargs = call[1]
+                if 'files' in kwargs:
+                    file_sent = True
+                    break
+            assert file_sent
+

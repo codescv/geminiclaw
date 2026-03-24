@@ -4,7 +4,7 @@ import sys
 
 class Config:
     def __init__(self, path="config.toml"):
-        paths = [path, os.path.join("private", "config.toml")]
+        paths = [path]
         self._raw_config = {}
         loaded = False
         for p in paths:
