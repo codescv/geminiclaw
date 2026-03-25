@@ -146,7 +146,16 @@ You can configure the directory where attachments are saved in your `config.toml
 # Defaults to "attachments" inside the workspace.
 attachments_dir = "attachments"
 ```
- 
+
+## Prompt Customization
+
+You can customize the base prompts used by the Gemini CLI agent by modifying the markdown files in the `prompts` directory. These files are injected to the system prompt when calling the Gemini CLI.
+
+```toml
+[prompt]
+user = ["user.md", ...]
+```
+
 ## Cronjobs
 
 You can configure periodic tasks (cronjobs) that read a prompt file, execute it using Gemini, and send the output to a specific Discord channel in a new thread.

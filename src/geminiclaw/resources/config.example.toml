@@ -17,10 +17,12 @@ guild_id = "YOUR_GUILD_ID"
 # timeout = 600
 
 # The path to the workspace directory to run the Gemini agent in
-workspace = "/path/to/your/workspace"
+workspace = "workspace"
 
 # Optional: A list of additional directories to include in the workspace
-# include_directories = ["/path/to/another/workspace", "/path/to/yet/another"]
+# This is useful for including directories that are not in the workspace, 
+# but you want the agent to have access to.
+# include_directories = ["/path/to/your/notes", "/path/to/your/projects"]
 
 # Whether to run the agent in a sandboxed environment (true/false)
 sandbox = false
@@ -31,7 +33,12 @@ sandbox = false
 # Optional: The directory to save attachments to (relative to workspace or absolute).
 # Defaults to "attachments" inside the workspace.
 # attachments_dir = "attachments"
- 
+
+[prompt]
+# The paths to the markdown files used for prompt customization (relative to workspace or absolute)
+# add your own user prompts here
+# user = ["user.md"]
+
 [[cronjob]]
 schedule = "10 13 * * *"
 prompt = "cronjobs/test.md"

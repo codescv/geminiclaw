@@ -113,10 +113,11 @@ class StreamSender:
         return msg
 
 class GeminiClawBot(commands.Bot):
-    def __init__(self, gemini_config, cronjobs=None, max_response_length=1900, *args, **kwargs):
+    def __init__(self, gemini_config, cronjobs=None, prompt_config=None, max_response_length=1900, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.gemini_config = gemini_config
         self.cronjobs = cronjobs or []
+        self.prompt_config = prompt_config or {}
         self.max_response_length = max_response_length
         self.scheduler = AsyncIOScheduler()
 
@@ -408,7 +409,7 @@ class GeminiClawBot(commands.Bot):
 
 
     async def _execute_gemini_command(self, prompt, channel_id, author_id, channel):
-        """Prepare command line arguments and execute the Gemini CLI as a subprocess."""
+        """Prepare prompts and execute the Gemini CLI as a subprocess."""
         gemini_exec = self.gemini_config.get('executable_path', 'gemini')
         args = [gemini_exec] # Start with the executable path
         
@@ -451,9 +452,54 @@ class GeminiClawBot(commands.Bot):
             if not prompt.startswith('[Previous Context]'):
                 prompt = f"{author_name}: {prompt}"
         args.extend(['-p', prompt])
+        
+        system_prompt_content = ""
+        
+        # Read system prompt from resources
+        try:
+            import importlib.resources
+            content = importlib.resources.files("geminiclaw.resources").joinpath("system.md").read_text()
+            if content:
+                system_prompt_content += (
+                    f"---BEGIN SYSTEM PROMPT---\n"
+                    f"{content}\n"
+                    "---END SYSTEM PROMPT---\n\n"
+                )
+        except Exception as e:
+            print(f"Warning: Failed to read system prompt from resources: {e}")
 
-        system_prompt_content = f'Identity: Your name is <@{self.user.name}>.\n'
-        system_prompt_content += 'If you want to send a file to the user as an attachment, use the exact syntax: [attachment: path/to/file]. The bot will extract this tag and upload the file to Discord.'
+        # Add user prompts if configured
+        if hasattr(self, 'prompt_config') and self.prompt_config:
+            # User prompts (list of strings)
+            user_paths = self.prompt_config.get("user")
+            if user_paths:
+                if isinstance(user_paths, str):
+                    user_paths = [user_paths]
+                for path in user_paths:
+                    full_path = path if os.path.isabs(path) else os.path.join(self.cwd, path)
+                    if os.path.exists(full_path):
+                        try:
+                            with open(full_path, "r") as f:
+                                content = f.read().strip()
+                            if content:
+                                system_prompt_content += (
+                                    f"---BEGIN {path}---\n"
+                                    f"{content}\n"
+                                    f"---END {path}---\n\n"
+                                )
+                        except Exception as e:
+                            print(f"Warning: Failed to read user prompt from {full_path}: {e}")
+        
+        discord_instructions = (
+            "---BEGIN DISCORD INSTRUCTIONS---\n"
+            "You are chatting with the user in a discord channel.\n"
+            f"Your discord user name is <@{self.user.name}>.\n"
+            "If you want to send a file to the user as an attachment, "
+            "use the exact syntax: [attachment: path/to/file].\n"
+            "The bot will extract this tag and upload the file to Discord.\n"
+            "---END DISCORD INSTRUCTIONS---\n\n"
+        )
+        system_prompt_content += discord_instructions
 
         topic = None
         if isinstance(channel, discord.Thread):
@@ -463,7 +509,12 @@ class GeminiClawBot(commands.Bot):
             topic = channel.topic
         
         if topic and topic.strip():
-            system_prompt_content += f"\nInstructions: {topic.strip()}"
+            topic_instructions = (
+                f"---BEGIN TOPIC INSTRUCTIONS---\n"
+                f"{topic.strip()}\n"
+                f"---END TOPIC INSTRUCTIONS---\n\n"
+            )
+            system_prompt_content += topic_instructions
         
         system_prompt_path = f"/tmp/gemini_system_{channel_id}_{self.user.id}.md"
         with open(system_prompt_path, "w") as f:
@@ -609,6 +660,7 @@ class GeminiClawBot(commands.Bot):
         db.update_message_status(msg_id_db, 'processing')
         print(f"====Processing message {msg_id_db}: {prompt[:120]}\n====")
         
+        # Handle inbound attachments
         attachments = []
         if attachments_json:
             try:
@@ -667,7 +719,7 @@ def main():
     intents = discord.Intents.default()
     intents.message_content = True
 
-    bot = GeminiClawBot(gemini_config=config.gemini, cronjobs=config.cronjobs, command_prefix="!", intents=intents, proxy=config.proxy)
+    bot = GeminiClawBot(gemini_config=config.gemini, cronjobs=config.cronjobs, prompt_config=config.prompt, command_prefix="!", intents=intents, proxy=config.proxy)
     bot.run(config.token)
 
 if __name__ == "__main__":

@@ -24,6 +24,7 @@ class Config:
         self.discord = self._raw_config.get("discord", {})
         self.gemini = self._raw_config.get("gemini", {})
         self.cronjobs = self._raw_config.get("cronjob", [])
+        self.prompt = self._raw_config.get("prompt", {})
         
         self.token = self.discord.get("token")
         if not self.token:
