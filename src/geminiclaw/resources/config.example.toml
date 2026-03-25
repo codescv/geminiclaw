@@ -34,13 +34,13 @@ sandbox = false
 # Defaults to "attachments" inside the workspace.
 # attachments_dir = "attachments"
 
-[prompt]
+# [prompt]
 # The paths to the markdown files used for prompt customization (relative to workspace or absolute)
 # add your own user prompts here
 # user = ["user.md"]
 
-[[cronjob]]
-schedule = "10 13 * * *"
-prompt = "cronjobs/test.md"
-channel_id = "channel id"
-mention_user_id = "your user id"
+# [[cronjob]]
+# schedule = "10 13 * * *"
+# prompt = "cronjobs/test.md"
+# channel_id = "channel id"
+# mention_user_id = "your user id"
