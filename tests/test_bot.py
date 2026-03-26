@@ -431,3 +431,51 @@ async def test_stream_sender_non_streaming_long():
     assert channel.send.call_count == 2
     channel.send.assert_any_call("Over flow ")
     channel.send.assert_any_call("text here")
+
+@pytest.mark.asyncio
+async def test_on_message_always_reply(bot_instance):
+    from unittest.mock import AsyncMock, MagicMock
+    
+    # Configure always_reply
+    bot_instance.always_reply = ["whitelisted_user", "12345"]
+    
+    # Mock message from whitelisted username
+    message_username = AsyncMock()
+    message_username.author.id = "67890" # Not in ID list
+    message_username.author.name = "whitelisted_user"
+    message_username.content = "Hello bot"
+    message_username.channel = AsyncMock()
+    message_username.mentions = []
+    
+    # Mock message from whitelisted ID
+    message_id = AsyncMock()
+    message_id.author.id = "12345"
+    message_id.author.name = "normal_user"
+    message_id.content = "Hello bot"
+    message_id.channel = AsyncMock()
+    message_id.mentions = []
+
+    # Mock message from unknown user
+    message_unknown = AsyncMock()
+    message_unknown.author.id = "67890"
+    message_unknown.author.name = "unknown_user"
+    message_unknown.content = "Hello bot"
+    message_unknown.channel = AsyncMock()
+    message_unknown.mentions = []
+
+    # Mock user.mentioned_in
+    bot_instance.user.mentioned_in = MagicMock(return_value=False)
+    
+    from unittest.mock import patch
+    with patch('geminiclaw.bot.db') as mock_db:
+        # Test username whitelist
+        await bot_instance.on_message(message_username)
+        assert message_username.add_reaction.call_count == 1 # Reaction added because it should reply
+
+        # Test ID whitelist
+        await bot_instance.on_message(message_id)
+        assert message_id.add_reaction.call_count == 1 # Reaction added
+
+        # Test unknown user (should NOT reply)
+        await bot_instance.on_message(message_unknown)
+        assert message_unknown.add_reaction.call_count == 0 # No reaction added

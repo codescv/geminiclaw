@@ -114,11 +114,12 @@ class StreamSender:
         return msg
 
 class GeminiClawBot(commands.Bot):
-    def __init__(self, gemini_config, cronjobs=None, prompt_config=None, max_response_length=1900, *args, **kwargs):
+    def __init__(self, gemini_config, cronjobs=None, prompt_config=None, always_reply=None, max_response_length=1900, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.gemini_config = gemini_config
         self.cronjobs = cronjobs or []
         self.prompt_config = prompt_config or {}
+        self.always_reply = always_reply or []
         self.max_response_length = max_response_length
         self.scheduler = AsyncIOScheduler()
         self.running_processes = {} # map channel_id (str) to subprocess
@@ -260,8 +261,13 @@ class GeminiClawBot(commands.Bot):
         should_reply = False
         is_new_thread_participant = False
 
-        if is_bot_mentioned or is_dm:
-            print('Replying to a mentioned message')
+        is_always_reply = False
+        if self.always_reply:
+            if str(message.author.id) in self.always_reply or message.author.name in self.always_reply:
+                is_always_reply = True
+
+        if is_bot_mentioned or is_dm or is_always_reply:
+            print('Replying to a message (mention, DM, or always_reply)')
             should_reply = True
             if is_thread:
                 if not db.has_thread(message.channel.id):
@@ -700,7 +706,7 @@ def main():
     intents = discord.Intents.default()
     intents.message_content = True
 
-    bot = GeminiClawBot(gemini_config=config.gemini, cronjobs=config.cronjobs, prompt_config=config.prompt, command_prefix="!", intents=intents, proxy=config.proxy)
+    bot = GeminiClawBot(gemini_config=config.gemini, cronjobs=config.cronjobs, prompt_config=config.prompt, always_reply=config.always_reply, command_prefix="!", intents=intents, proxy=config.proxy)
     bot.run(config.token)
 
 if __name__ == "__main__":

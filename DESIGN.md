@@ -13,7 +13,7 @@ Inbound Channels (e.g. Discord) -> SQLite Database -> Polling loop (Python async
 ### Components
 
 **1. Channels (Discord Bot)**
-- **Inbound:** Listens for mentions or specific commands in a Discord channel using `discord.py`. Parses the user's message and inserts it into an SQLite database with a status of `pending`.
+- **Inbound:** Listens for mentions, whitelisted users, or specific commands in a Discord channel using `discord.py`. Parses the user's message and inserts it into an SQLite database with a status of `pending`.
 - **Outbound:** An asynchronous task running alongside the bot continuously polls the SQLite database for messages marked as `completed` or `failed`. Once found, it sends the stored response back to the corresponding Discord channel and updates the record to `delivered`.
 
 **2. Database Layer**

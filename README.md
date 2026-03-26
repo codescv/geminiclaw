@@ -148,6 +148,17 @@ You can configure the directory where attachments are saved in your `config.toml
 attachments_dir = "attachments"
 ```
 
+## Always Reply (Whitelist)
+
+You can configure the bot to always reply to specific whitelisted users without requiring them to explicitly mention the bot in every message.
+
+Add the `always_reply` list to your `config.toml` file under the `[discord]` section:
+
+```toml
+[discord]
+always_reply = ["user1", "user2"]
+```
+
 ## Prompt Customization
 
 You can customize the base prompts used by the Gemini CLI agent by modifying the markdown files in the `prompts` directory. These files are injected to the system prompt when calling the Gemini CLI.
