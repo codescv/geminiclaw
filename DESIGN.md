@@ -54,3 +54,4 @@ Inbound Channels (e.g. Discord) -> SQLite Database -> Polling loop (Python async
  
 ## Process Management
 - **Single Process:** The Discord Bot (`discord.py` client loop) and the database polling mechanism will run within the same Python process using `asyncio` tasks. This avoids the overhead and complexity of managing multiple background services, while still keeping the architecture decoupled via the SQLite layer.
+- **Process Killing:** The bot tracks running `gemini` subprocesses in a dictionary. When a `-kill` command is received in a channel, it terminates the process for that specific channel (or thread) manually.

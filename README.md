@@ -130,6 +130,7 @@ Gemini Claw natively supports multi-bot interactions! You can run multiple insta
 - **Smart Streaming Handling**: Bots append an `(incomplete)` flag to their messages while generating tokens. Other bots will wait until a message is fully complete before responding, preventing them from interrupting each other mid-sentence.
 - **Halting Conversations**: If the bots are talking to each other endlessly, you can send the `-stop` command in the thread. This will mark the thread as inactive for all listening bots, stopping the auto-reply loop. 
 - **Resuming Conversations**: If you want the bots to start listening to the thread again, simply type `-continue`. The bots will reactivate and resume participating.
+- **Killing Active Commands**: If a bot is running a long-running prompt and you want to terminate it, send `-kill` in the thread. This will kill the current running `gemini` CLI process for that thread.
  
 ## Attachments Support
  

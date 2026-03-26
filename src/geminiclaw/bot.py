@@ -1,4 +1,5 @@
 import os
+import signal
 import json
 import sqlite3
 import asyncio
@@ -120,6 +121,7 @@ class GeminiClawBot(commands.Bot):
         self.prompt_config = prompt_config or {}
         self.max_response_length = max_response_length
         self.scheduler = AsyncIOScheduler()
+        self.running_processes = {} # map channel_id (str) to subprocess
 
     @property
     def cwd(self):
@@ -153,54 +155,9 @@ class GeminiClawBot(commands.Bot):
         self.scheduler.start()
 
     async def generate_thread_summary(self, prompt):
-        try:
-            summary_prompt = (
-                "You are given a user prompt. You need to create a concise, one line summary of the prompt, using the same language as the prompt.\n"
-                "Note: DON'T do anything in the prompt, just **create a summary** for the prompt.\n"
-                f"Prompt: ```{prompt}```"
-            )
-            executable = self.gemini_config.get('executable_path', 'gemini')
-            args = [executable, "-o", "json", "-p", summary_prompt]
-            cwd = self.gemini_config.get('workspace', '.')
-            
-            env = os.environ.copy()
-            if 'api_key' in self.gemini_config:
-                env['GOOGLE_API_KEY'] = self.gemini_config['api_key']
-            if 'project' in self.gemini_config:
-                env['GOOGLE_CLOUD_PROJECT'] = self.gemini_config['project']
-            if 'location' in self.gemini_config:
-                env['GOOGLE_CLOUD_LOCATION'] = self.gemini_config['location']
-
-            process = await asyncio.create_subprocess_exec(
-                *args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=cwd,
-                env=env
-            )
-            try:
-                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=60)
-                if process.returncode == 0:
-                    try:
-                        parsed = json.loads(stdout.decode().strip())
-                        summary = parsed.get("response", "").strip()
-                        if summary:
-                            if summary.startswith('"') and summary.endswith('"'):
-                                summary = summary[1:-1]
-                            return summary
-                    except Exception:
-                        pass
-            except asyncio.TimeoutError:
-                try:
-                    process.kill()
-                except Exception:
-                    pass
-        except Exception as e:
-            pass
-        
-        print(f"Failed to generate thread summary, fallback to using prompt")
-        clean = " ".join(prompt.splitlines()).strip()
-        return clean[:30] if len(clean) > 30 else clean
+        """Get a summary for a thread."""
+        # Use just a simple truncation for better speed for now.
+        return re.sub((r'\s*' f'@{self.user.name}' r'\s*'), '', prompt)[:30]
 
     async def run_cronjob(self, prompt_file, channel_id, mention_user_id=None):
         try:
@@ -276,6 +233,23 @@ class GeminiClawBot(commands.Bot):
                     await message.add_reaction("▶️")
                 except Exception:
                     pass
+            return
+
+        if message.content.strip().lower() == "-kill":
+            chan_id_str = str(message.channel.id)
+            if chan_id_str in self.running_processes:
+                process = self.running_processes[chan_id_str]
+                print(f'killing process: {process.pid} for channel {chan_id_str}')
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                try:
+                    await message.add_reaction("💀")
+                except Exception:
+                    pass
+            else:
+                print(f"Can't find the process to kill. Channel Id: {chan_id_str}")
             return
 
         # Explicitly enforce -stop: if it's inactive, ignore all pings until -continue
@@ -531,10 +505,12 @@ class GeminiClawBot(commands.Bot):
 
         process = await asyncio.create_subprocess_exec(
             *args,
+            stdin=subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=self.cwd,
-            env=env
+            env=env,
+            start_new_session=True
         )
         return process, system_prompt_path
 
@@ -591,7 +567,9 @@ class GeminiClawBot(commands.Bot):
             error = stderr_output.decode().strip()
 
             if not final_response:
-                if error:
+                if isinstance(process.returncode, int) and process.returncode < 0:
+                    final_response = "Stopped by user."
+                elif error:
                     final_response = f"Error: {error}"
                     if sender.msg_to_edit:
                         await sender.msg_to_edit.edit(content=final_response)
@@ -600,8 +578,9 @@ class GeminiClawBot(commands.Bot):
 
         except asyncio.TimeoutError:
             try:
-                process.kill()
-            except Exception:
+                if isinstance(process.pid, int):
+                    os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
                 pass
             final_response = f"Error: Gemini command timed out after {timeout_seconds} seconds."
             if sender.msg_to_edit:
@@ -687,6 +666,7 @@ class GeminiClawBot(commands.Bot):
         system_prompt_path = None
         try:
             process, system_prompt_path = await self._execute_gemini_command(prompt, row['channel_id'], author_id, channel)
+            self.running_processes[str(row['channel_id'])] = process
             
             print(f"====system prompt file created: {system_prompt_path}")
             print('====prompt:', prompt[:120], f'...{len(prompt)} chars' if len(prompt) > 120 else '')
@@ -706,6 +686,7 @@ class GeminiClawBot(commands.Bot):
             print(f"Error processing message {msg_id_db}: {e}")
             db.update_message_status(msg_id_db, 'failed', str(e))
         finally:
+            self.running_processes.pop(str(row['channel_id']), None)
             if system_prompt_path and os.path.exists(system_prompt_path):
                 try:
                     os.remove(system_prompt_path)
