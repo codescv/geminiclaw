@@ -479,3 +479,53 @@ async def test_on_message_always_reply(bot_instance):
         # Test unknown user (should NOT reply)
         await bot_instance.on_message(message_unknown)
         assert message_unknown.add_reaction.call_count == 0 # No reaction added
+
+@pytest.mark.asyncio
+async def test_on_message_always_reply_in_thread(bot_instance):
+    from unittest.mock import AsyncMock, MagicMock
+    import discord
+    
+    bot_instance.always_reply = ["whitelisted_user"]
+    
+    # Mock message in a thread
+    message = AsyncMock()
+    message.author.id = "67890"
+    message.author.name = "whitelisted_user"
+    message.content = "Hello bot"
+    message.channel = AsyncMock(spec=discord.Thread) # Is a thread
+    message.mentions = []
+    
+    bot_instance.user.mentioned_in = MagicMock(return_value=False)
+    
+    from unittest.mock import patch
+    with patch('geminiclaw.bot.db') as mock_db:
+        mock_db.has_thread.return_value = False # New thread, not active yet
+        mock_db.is_thread_active.return_value = False # Not active
+        
+        await bot_instance.on_message(message)
+        
+        # Should NOT reply because it is in a thread and not mentioned
+        assert message.add_reaction.call_count == 0
+
+@pytest.mark.asyncio
+async def test_on_message_always_reply_with_mentions(bot_instance):
+    from unittest.mock import AsyncMock, MagicMock
+    
+    bot_instance.always_reply = ["whitelisted_user"]
+    
+    # Mock message with mentions
+    message = AsyncMock()
+    message.author.id = "67890"
+    message.author.name = "whitelisted_user"
+    message.content = "Hello @someone"
+    message.channel = AsyncMock()
+    message.mentions = [AsyncMock()] # Has mentions
+    
+    bot_instance.user.mentioned_in = MagicMock(return_value=False)
+    
+    from unittest.mock import patch
+    with patch('geminiclaw.bot.db') as mock_db:
+        await bot_instance.on_message(message)
+        
+        # Should NOT reply because it has mentions
+        assert message.add_reaction.call_count == 0

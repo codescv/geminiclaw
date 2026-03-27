@@ -262,7 +262,7 @@ class GeminiClawBot(commands.Bot):
         is_new_thread_participant = False
 
         is_always_reply = False
-        if self.always_reply:
+        if not is_thread and not message.mentions and self.always_reply:
             if str(message.author.id) in self.always_reply or message.author.name in self.always_reply:
                 is_always_reply = True
 

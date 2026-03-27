@@ -150,7 +150,7 @@ attachments_dir = "attachments"
 
 ## Always Reply (Whitelist)
 
-You can configure the bot to always reply to specific whitelisted users without requiring them to explicitly mention the bot in every message.
+You can configure the bot to always reply to specific whitelisted users without requiring them to explicitly mention the bot in every message. This takes effect only if the message is not within a thread and there are no explicit mentions.
 
 Add the `always_reply` list to your `config.toml` file under the `[discord]` section:
 
