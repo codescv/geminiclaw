@@ -529,3 +529,36 @@ async def test_on_message_always_reply_with_mentions(bot_instance):
         
         # Should NOT reply because it has mentions
         assert message.add_reaction.call_count == 0
+
+@pytest.mark.asyncio
+async def test_get_gemini_session_summary(bot_instance):
+    from unittest.mock import patch, AsyncMock
+    
+    with patch('asyncio.create_subprocess_exec') as mock_exec:
+        process = AsyncMock()
+        process.communicate.return_value = (
+            b"Available sessions for this project (1):\n  1. my awesome summary (2 min ago) [sess-1234]\n", 
+            b""
+        )
+        process.returncode = 0
+        mock_exec.return_value = process
+        
+        summary = await bot_instance.get_gemini_session_summary("sess-1234")
+        assert summary == "my awesome summary"
+
+@pytest.mark.asyncio
+async def test_get_gemini_session_summary_not_found(bot_instance):
+    from unittest.mock import patch, AsyncMock
+    
+    with patch('asyncio.create_subprocess_exec') as mock_exec:
+        process = AsyncMock()
+        process.communicate.return_value = (
+            b"Available sessions for this project (1):\n  1. my awesome summary (2 min ago) [sess-1234]\n", 
+            b""
+        )
+        process.returncode = 0
+        mock_exec.return_value = process
+        
+        summary = await bot_instance.get_gemini_session_summary("sess-5678")
+        assert summary is None
+

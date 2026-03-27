@@ -160,6 +160,38 @@ class GeminiClawBot(commands.Bot):
         # Use just a simple truncation for better speed for now.
         return re.sub((r'\s*' f'@{self.user.name}' r'\s*'), '', prompt)[:30]
 
+    async def get_gemini_session_summary(self, session_id):
+        """Get the summary for a session from gemini --list-sessions."""
+        if not session_id:
+            return None
+            
+        gemini_exec = self.gemini_config.get('executable_path', 'gemini')
+        args = [gemini_exec, '--list-sessions']
+        
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=self.cwd
+            )
+            stdout, stderr = await process.communicate()
+            if process.returncode != 0:
+                print(f"Error listing sessions: {stderr.decode().strip()}")
+                return None
+                
+            output = stdout.decode()
+            for line in output.splitlines():
+                if session_id in line:
+                    match = re.search(r'^\s*\d+\.\s*(.+?)\s*\([^)]+\)\s*\[([^\]]+)\]', line)
+                    if match:
+                        return match.group(1).strip()
+            return None
+        except Exception as e:
+            print(f"Failed to get session summary: {e}")
+            return None
+
+
     async def run_cronjob(self, prompt_file, channel_id, mention_user_id=None):
         try:
             if not os.path.exists(prompt_file):
@@ -682,6 +714,18 @@ class GeminiClawBot(commands.Bot):
             final_response = await self._stream_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds)
 
             db.update_message_status(msg_id_db, 'completed', final_response)
+            
+            if isinstance(channel, discord.Thread):
+                session_id = db.get_thread_session(channel.id)
+                if session_id:
+                    summary = await self.get_gemini_session_summary(session_id)
+                    if summary and summary != channel.name:
+                        try:
+                            await channel.edit(name=summary)
+                            print(f"Updated thread name to: {summary}")
+                        except Exception as e:
+                            print(f"Failed to update thread name: {e}")
+
             
             # Send attachments
             await self._handle_outbound_attachments(final_response, channel, self.cwd)
