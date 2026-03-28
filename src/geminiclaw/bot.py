@@ -13,6 +13,9 @@ from apscheduler.triggers.cron import CronTrigger
 from . import db
 from .config import Config
 
+# Maximum output buffer size (for Gemini CLI output)
+OUTPUT_BUFFER_LIMIT = 2 ** 20  # 1MB
+
 class StreamSender:
     """Handles sending long text responses to Discord with smart chunking and streaming edits."""
     
@@ -173,6 +176,7 @@ class GeminiClawBot(commands.Bot):
                 *args,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                limit=OUTPUT_BUFFER_LIMIT,
                 cwd=self.cwd
             )
             stdout, stderr = await process.communicate()
