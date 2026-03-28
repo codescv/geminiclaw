@@ -33,6 +33,10 @@ def init_db():
         cursor.execute("ALTER TABLE messages ADD COLUMN attachments TEXT")
     except sqlite3.OperationalError:
         pass
+    try:
+        cursor.execute("ALTER TABLE messages ADD COLUMN is_silent INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
     print(f"Database initialized at {DB_PATH}")

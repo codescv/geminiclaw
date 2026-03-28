@@ -47,3 +47,4 @@ sandbox = false
 # prompt = "cronjobs/test.md"
 # channel_id = "channel id"
 # mention_user_id = "your user id"
+# silent = false

@@ -143,6 +143,7 @@ class GeminiClawBot(commands.Bot):
             prompt_file = job_config.get("prompt")
             channel_id = job_config.get("channel_id")
             mention_user_id = job_config.get("mention_user_id")
+            silent = job_config.get("silent", False)
             if schedule and prompt_file and channel_id:
                 if not os.path.exists(prompt_file):
                     print(f"Warning: Cronjob prompt file not found at {prompt_file}. Skipping.")
@@ -151,7 +152,7 @@ class GeminiClawBot(commands.Bot):
                     self.scheduler.add_job(
                         self.run_cronjob,
                         CronTrigger.from_crontab(schedule),
-                        args=[prompt_file, channel_id, mention_user_id]
+                        args=[prompt_file, channel_id, mention_user_id, silent]
                     )
                     print(f"Added cronjob: {schedule} -> {prompt_file} in {channel_id}")
                 except Exception as e:
@@ -196,7 +197,7 @@ class GeminiClawBot(commands.Bot):
             return None
 
 
-    async def run_cronjob(self, prompt_file, channel_id, mention_user_id=None):
+    async def run_cronjob(self, prompt_file, channel_id, mention_user_id=None, silent=False):
         try:
             if not os.path.exists(prompt_file):
                 print(f"Cronjob Error: Prompt file not found at {prompt_file}")
@@ -206,6 +207,21 @@ class GeminiClawBot(commands.Bot):
                 prompt = f.read().strip()
             if not prompt:
                 print(f"Cronjob Error: Prompt file {prompt_file} is empty.")
+                return
+
+            if silent:
+                print(f"Cronjob triggered (silent): {prompt_file} scheduled running in background")
+                try:
+                    process, system_prompt_path = await self._execute_gemini_command(prompt, channel_id, str(self.user.id), None)
+                    stdout, stderr = await process.communicate()
+                    if process.returncode != 0:
+                        print(f"Silent cronjob {prompt_file} failed: {stderr.decode().strip()}")
+                    else:
+                        print(f"Silent cronjob {prompt_file} completed successfully.")
+                    if system_prompt_path and os.path.exists(system_prompt_path):
+                        os.remove(system_prompt_path)
+                except Exception as e:
+                    print(f"Error executing silent cronjob {prompt_file}: {e}")
                 return
 
             channel = self.get_channel(int(channel_id))

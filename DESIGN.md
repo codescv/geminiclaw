@@ -49,8 +49,8 @@ Inbound Channels (e.g. Discord) -> SQLite Database -> Polling loop (Python async
  
 **6. Cronjobs Management**
 - **Triggering**: Periodically triggers based on `cron` schedule expressions using `apscheduler`.
-- **Flow**: Reads a prompt file and inserts a **pending message** into the SQLite database with the thread's ID (or creates a thread) and sets the `author_id` to the bot's own ID.
-- **Processing**: The standard async polling loop automatically picks this up, executes it with the Gemini agent, and delivers the response into the thread just like a normal user prompt. This decouples scheduling from execution logic.
+- **Flow**: Reads a prompt file and inserts a **pending message** into the SQLite database with the thread's ID (or creates a thread) and sets the `author_id` to the bot's own ID. If the cronjob has `silent` set to true, it will insert a silent message and skip thread creation.
+- **Processing**: The standard async polling loop automatically picks this up, executes it with the Gemini agent, and delivers the response into the thread just like a normal user prompt. For silent messages, execution happens in the background without any Discord interaction. This decouples scheduling from execution logic.
  
 ## Process Management
 - **Single Process:** The Discord Bot (`discord.py` client loop) and the database polling mechanism will run within the same Python process using `asyncio` tasks. This avoids the overhead and complexity of managing multiple background services, while still keeping the architecture decoupled via the SQLite layer.

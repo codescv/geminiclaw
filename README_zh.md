@@ -160,6 +160,7 @@ schedule = "*/5 * * * *"                     # Cron 定时表达式
 prompt = "cronjobs/daily_summary.md"         # prompt 文件的相对/绝对路径
 channel_id = "123456789012345678"            # Discord 频道 ID (能在 https://discord.com/channels/server_id/channel_id 里找到)
 mention_user_id = "123456789012345678"       # 可选：配置上了你的用户 ID，机器人建好贴子之后会自动把你也 @ 进来
+silent = false                               # 可选：设为 true 可以在后台安静执行任务而不发送任何 Discord 消息
 ```
 
 ### 📖 小贴士：如何找到你自己的 Discord User ID
