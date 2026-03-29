@@ -6,7 +6,7 @@ from enum import Enum
 import typer
 
 from .db import init_db
-from .service import install as service_install, start as service_start, stop as service_stop, status as service_status
+from .service import install as service_install, start as service_start, stop as service_stop, status as service_status, restart as service_restart
 
 app = typer.Typer(help="Gemini Claw CLI")
 
@@ -40,6 +40,7 @@ class ServiceAction(str, Enum):
     start = "start"
     stop = "stop"
     status = "status"
+    restart = "restart"
 
 @app.command(help="Manage the background service")
 def service(
@@ -54,6 +55,8 @@ def service(
         service_stop(service_name)
     elif action == ServiceAction.status:
         service_status(service_name)
+    elif action == ServiceAction.restart:
+        service_restart(service_name)
 
 if __name__ == "__main__":
     app()

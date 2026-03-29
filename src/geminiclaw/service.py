@@ -180,3 +180,19 @@ def status(service_name="com.codescv.geminiclaw"):
         print(result.stdout)
     else:
         print(f"Unsupported platform: {sys.platform}")
+
+def restart(service_name="com.codescv.geminiclaw"):
+    if sys.platform == "darwin":
+        plist_label, plist_path = get_macos_paths(service_name)
+        print(f"Restarting {plist_label}...")
+        subprocess.run(["launchctl", "unload", "-w", str(plist_path)], capture_output=True)
+        subprocess.run(["launchctl", "load", "-w", str(plist_path)])
+        subprocess.run(["launchctl", "start", plist_label])
+        print("Service restarted.")
+    elif sys.platform == "linux":
+        systemd_service_name, _ = get_linux_paths(service_name)
+        print(f"Restarting {systemd_service_name}...")
+        subprocess.run(["systemctl", "--user", "restart", systemd_service_name])
+        print("Service restarted.")
+    else:
+        print(f"Unsupported platform: {sys.platform}")
