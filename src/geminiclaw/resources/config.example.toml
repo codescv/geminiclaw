@@ -32,6 +32,9 @@ sandbox = false
  
 # Whether to always run Gemini with YOLO mode enabled (-y) (true/false)
 # yolo = false
+
+# Optional: The home directory for the Gemini CLI configuration and session data
+# cli_home = "/path/to/.config/gemini"
  
 # Optional: The directory to save attachments to (relative to workspace or absolute).
 # Defaults to "attachments" inside the workspace.

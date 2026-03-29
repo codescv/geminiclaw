@@ -164,6 +164,38 @@ async def test_process_pending_messages_with_topic(bot_instance):
             assert os.path.exists(file_path) == False
 
 @pytest.mark.asyncio
+async def test_process_pending_messages_cli_home(bot_instance):
+    from unittest.mock import patch, AsyncMock
+    import os
+    
+    bot_instance.gemini_config['cli_home'] = '/custom/path/home'
+
+    with patch('geminiclaw.bot.db') as mock_db:
+        mock_db.get_pending_message.return_value = {
+            'id': 1,
+            'channel_id': '123456',
+            'prompt': 'Hello',
+            'author_id': '789',
+            'status': 'pending'
+        }
+        mock_db.get_thread_session.return_value = None
+        
+        bot_instance.get_channel = AsyncMock(return_value=None)
+        bot_instance.fetch_channel = AsyncMock(return_value=None)
+
+        with patch('asyncio.create_subprocess_exec') as mock_exec:
+            process = AsyncMock()
+            process.communicate.return_value = (b'{"response": "Hi"}', b'')
+            mock_exec.return_value = process
+            
+            await bot_instance.process_pending_messages()
+            
+            args, kwargs = mock_exec.call_args
+            env = kwargs.get('env')
+            assert env is not None
+            assert env.get('GEMINI_CLI_HOME') == '/custom/path/home'
+
+@pytest.mark.asyncio
 async def test_process_pending_messages_with_yolo_config(bot_instance):
     from unittest.mock import patch, AsyncMock
     

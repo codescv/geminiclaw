@@ -564,6 +564,8 @@ class GeminiClawBot(commands.Bot):
             env['GOOGLE_CLOUD_PROJECT'] = self.gemini_config['project']
         if 'location' in self.gemini_config:
             env['GOOGLE_CLOUD_LOCATION'] = self.gemini_config['location']
+        if self.gemini_config.get('cli_home') is not None:
+            env['GEMINI_CLI_HOME'] = str(self.gemini_config['cli_home'])
         env['GEMINI_SYSTEM_MD'] = system_prompt_path
 
         process = await asyncio.create_subprocess_exec(
