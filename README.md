@@ -164,6 +164,7 @@ always_reply = ["user1", "user2"]
 You can enforce safety boundaries or tool usage restrictions by specifying policy configuration files in `config.toml`. The bot will automatically inject these as multiple `--policy <file>` arguments to every Gemini CLI invocation.
 
 ```toml
+[gemini]
 policy = ["/path/to/my_policy.yaml", "/path/to/another_policy.yaml"]
 ```
 

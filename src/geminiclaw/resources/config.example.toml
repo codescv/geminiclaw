@@ -37,13 +37,13 @@ sandbox = false
 # Defaults to "attachments" inside the workspace.
 # attachments_dir = "attachments"
 
+# Optional: A list of policy configuration files to forcefully inject into every Gemini CLI execution
+# policy = ["my_policy1.yaml", "my_policy2.yaml"]
+
 # [prompt]
 # The paths to the markdown files used for prompt customization (relative to workspace or absolute)
 # add your own user prompts here
 # user = ["user.md"]
-
-# Optional: A list of policy configuration files to forcefully inject into every Gemini CLI execution
-# policy = ["my_policy1.yaml", "my_policy2.yaml"]
 
 # [[cronjob]]
 # schedule = "10 13 * * *"
