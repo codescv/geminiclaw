@@ -169,15 +169,10 @@ def stop(service_name="com.codescv.geminiclaw"):
 def status(service_name="com.codescv.geminiclaw"):
     if sys.platform == "darwin":
         plist_label, _ = get_macos_paths(service_name)
-        result = subprocess.run(["launchctl", "list"], capture_output=True, text=True)
-        found = False
-        for line in result.stdout.splitlines():
-            if plist_label in line:
-                print(f"Service status: {line.strip()}")
-                found = True
-                break
-                
-        if not found:
+        result = subprocess.run(["launchctl", "list", plist_label], capture_output=True, text=True)
+        if result.returncode == 0:
+            print(f"Service status:\n{result.stdout.strip()}")
+        else:
             print("Service is not currently loaded or running.")
     elif sys.platform == "linux":
         systemd_service_name, _ = get_linux_paths(service_name)
