@@ -42,6 +42,9 @@ sandbox = false
 # add your own user prompts here
 # user = ["user.md"]
 
+# Optional: A list of policy configuration files to forcefully inject into every Gemini CLI execution
+# policy = ["my_policy1.yaml", "my_policy2.yaml"]
+
 # [[cronjob]]
 # schedule = "10 13 * * *"
 # prompt = "cronjobs/test.md"

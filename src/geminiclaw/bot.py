@@ -117,12 +117,13 @@ class StreamSender:
         return msg
 
 class GeminiClawBot(commands.Bot):
-    def __init__(self, gemini_config, cronjobs=None, prompt_config=None, always_reply=None, max_response_length=1900, *args, **kwargs):
+    def __init__(self, gemini_config, cronjobs=None, prompt_config=None, always_reply=None, max_response_length=1900, policy=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.gemini_config = gemini_config
         self.cronjobs = cronjobs or []
         self.prompt_config = prompt_config or {}
         self.always_reply = always_reply or []
+        self.policy = policy or []
         self.max_response_length = max_response_length
         self.scheduler = AsyncIOScheduler()
         self.running_processes = {} # map channel_id (str) to subprocess
@@ -454,6 +455,10 @@ class GeminiClawBot(commands.Bot):
             args.append('-y')
         elif self.gemini_config.get('sandbox') == True:
             args.append('--sandbox')
+
+        for p in self.policy:
+            args.extend(['--policy', p])
+
         thread_session = db.get_thread_session(channel_id)
         if thread_session:
             args.extend(['-r', thread_session])
@@ -770,7 +775,7 @@ def main():
     intents = discord.Intents.default()
     intents.message_content = True
 
-    bot = GeminiClawBot(gemini_config=config.gemini, cronjobs=config.cronjobs, prompt_config=config.prompt, always_reply=config.always_reply, command_prefix="!", intents=intents, proxy=config.proxy)
+    bot = GeminiClawBot(gemini_config=config.gemini, cronjobs=config.cronjobs, prompt_config=config.prompt, always_reply=config.always_reply, policy=config.policy, command_prefix="!", intents=intents, proxy=config.proxy)
     bot.run(config.token)
 
 if __name__ == "__main__":

@@ -159,6 +159,14 @@ Add the `always_reply` list to your `config.toml` file under the `[discord]` sec
 always_reply = ["user1", "user2"]
 ```
 
+## Security Policy
+
+You can enforce safety boundaries or tool usage restrictions by specifying policy configuration files in `config.toml`. The bot will automatically inject these as multiple `--policy <file>` arguments to every Gemini CLI invocation.
+
+```toml
+policy = ["/path/to/my_policy.yaml", "/path/to/another_policy.yaml"]
+```
+
 ## Prompt Customization
 
 You can customize the base prompts used by the Gemini CLI agent by modifying the markdown files in the `prompts` directory. These files are injected to the system prompt when calling the Gemini CLI.

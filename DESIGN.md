@@ -31,7 +31,7 @@ Inbound Channels (e.g. Discord) -> SQLite Database -> Polling loop (Python async
 - A Python `asyncio` loop running concurrently with the Discord bot.
 - It polls the database for `pending` messages and marks them as `processing`.
 - It executes the Gemini CLI using a headless Python subprocess.
-  - **Command Execution:** To avoid the complexities of forwarding PTY interactions over Discord, we will use Gemini CLI's headless mode (`-p`) combined with YOLO mode (`-y` or `--yolo`) to automatically accept tools.
+  - **Command Execution:** To avoid the complexities of forwarding PTY interactions over Discord, we will use Gemini CLI's headless mode (`-p`) combined with YOLO mode (`-y` or `--yolo`) to automatically accept tools. Any top-level `policy` files defined in `config.toml` will be appended automatically as `--policy <file>` arguments.
   - **Execution Command:** `gemini -y -p "<prompt>"` (we can potentially add `-r latest` to resume state, or manage sessions manually per user/channel).
 - Standard output and standard error are captured. Once the process completes, the output is saved to the `response` field, and the status is updated to `completed` (or `failed` if the exit code is non-zero).
 
