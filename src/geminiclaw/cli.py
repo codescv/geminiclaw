@@ -41,16 +41,19 @@ class ServiceAction(str, Enum):
     stop = "stop"
     status = "status"
 
-@app.command(help="Manage the macOS background service")
-def service(action: ServiceAction = typer.Argument(..., help="Action to perform")):
+@app.command(help="Manage the background service")
+def service(
+    action: ServiceAction = typer.Argument(..., help="Action to perform"),
+    service_name: str = typer.Option("com.codescv.geminiclaw", "--service-name", help="Name of the service")
+):
     if action == ServiceAction.install:
-        service_install()
+        service_install(service_name)
     elif action == ServiceAction.start:
-        service_start()
+        service_start(service_name)
     elif action == ServiceAction.stop:
-        service_stop()
+        service_stop(service_name)
     elif action == ServiceAction.status:
-        service_status()
+        service_status(service_name)
 
 if __name__ == "__main__":
     app()

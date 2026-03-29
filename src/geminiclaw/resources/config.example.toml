@@ -1,8 +1,6 @@
 [discord]
-# The Discord bot token
+# The Discord bot token, can also be set from env variable DISCORD_TOKEN
 token = "YOUR_DISCORD_BOT_TOKEN"
-# Optional: the Guild ID to deploy commands to a specific server
-guild_id = "YOUR_GUILD_ID"
 
 # Optional: List of users to always reply to without explicit mention (usernames or user IDs)
 # always_reply = ["user1", "user2"]

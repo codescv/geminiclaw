@@ -29,9 +29,9 @@ class Config:
  
         self.always_reply = self.discord.get("always_reply", [])
         
-        self.token = self.discord.get("token")
+        self.token = self.discord.get("token") or os.getenv("DISCORD_TOKEN")
         if not self.token:
-            print("Error: discord.token not found in config.toml")
+            print("Error: discord.token not found in config.toml and DISCORD_TOKEN environment variable is not set")
             sys.exit(1)
             
         self.proxy = os.getenv('HTTP_PROXY') or os.getenv('http_proxy') or os.getenv('HTTPS_PROXY') or os.getenv('https_proxy')
