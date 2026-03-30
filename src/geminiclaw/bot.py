@@ -178,7 +178,6 @@ class GeminiClawBot(commands.Bot):
                 *args,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                limit=OUTPUT_BUFFER_LIMIT,
                 cwd=self.cwd
             )
             stdout, stderr = await process.communicate()
@@ -573,6 +572,7 @@ class GeminiClawBot(commands.Bot):
             stdin=subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            limit=OUTPUT_BUFFER_LIMIT,
             cwd=self.cwd,
             env=env,
             start_new_session=True
