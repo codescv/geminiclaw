@@ -173,12 +173,17 @@ class GeminiClawBot(commands.Bot):
         gemini_exec = self.gemini_config.get('executable_path', 'gemini')
         args = [gemini_exec, '--list-sessions']
         
+        env = os.environ.copy()
+        if self.gemini_config.get('cli_home') is not None:
+            env['GEMINI_CLI_HOME'] = str(self.gemini_config['cli_home'])
+
         try:
             process = await asyncio.create_subprocess_exec(
                 *args,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=self.cwd
+                cwd=self.cwd,
+                env=env
             )
             stdout, stderr = await process.communicate()
             if process.returncode != 0:
@@ -742,7 +747,7 @@ class GeminiClawBot(commands.Bot):
 
             db.update_message_status(msg_id_db, 'completed', final_response)
             
-            if isinstance(channel, discord.Thread):
+            if isinstance(channel, discord.Thread) and db.get_message_count(channel.id) >= 2:
                 session_id = db.get_thread_session(channel.id)
                 if session_id:
                     summary = await self.get_gemini_session_summary(session_id)

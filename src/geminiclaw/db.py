@@ -127,3 +127,13 @@ def set_thread_session(thread_id, session_id):
     )
     conn.commit()
     conn.close()
+
+def get_message_count(channel_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) as count FROM messages WHERE channel_id = ?", (str(channel_id),))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return row['count']
+    return 0
