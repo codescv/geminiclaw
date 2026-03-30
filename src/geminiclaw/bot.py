@@ -145,7 +145,7 @@ class GeminiClawBot(commands.Bot):
             channel_id = job_config.get("channel_id")
             mention_user_id = job_config.get("mention_user_id")
             silent = job_config.get("silent", False)
-            if schedule and prompt_file and channel_id:
+            if schedule and prompt_file and (channel_id or silent):
                 if not os.path.exists(prompt_file):
                     print(f"Warning: Cronjob prompt file not found at {prompt_file}. Skipping.")
                     continue
