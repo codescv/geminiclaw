@@ -9,6 +9,7 @@ from discord.ext import tasks, commands
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import time
 import re
+import random
 from apscheduler.triggers.cron import CronTrigger
 from . import db
 from .config import Config
@@ -145,6 +146,7 @@ class GeminiClawBot(commands.Bot):
             channel_id = job_config.get("channel_id")
             mention_user_id = job_config.get("mention_user_id")
             silent = job_config.get("silent", False)
+            probability = job_config.get("probability")
             if schedule and prompt_file and (channel_id or silent):
                 if not os.path.exists(prompt_file):
                     print(f"Warning: Cronjob prompt file not found at {prompt_file}. Skipping.")
@@ -153,7 +155,7 @@ class GeminiClawBot(commands.Bot):
                     self.scheduler.add_job(
                         self.run_cronjob,
                         CronTrigger.from_crontab(schedule),
-                        args=[prompt_file, channel_id, mention_user_id, silent]
+                        args=[prompt_file, channel_id, mention_user_id, silent, probability]
                     )
                     print(f"Added cronjob: {schedule} -> {prompt_file} in {channel_id}")
                 except Exception as e:
@@ -202,7 +204,16 @@ class GeminiClawBot(commands.Bot):
             return None
 
 
-    async def run_cronjob(self, prompt_file, channel_id, mention_user_id=None, silent=False):
+    async def run_cronjob(self, prompt_file, channel_id, mention_user_id=None, silent=False, probability=None):
+        if probability is not None:
+            try:
+                prob = float(probability)
+                if random.random() > prob:
+                    print(f"Cronjob {prompt_file} skipped due to probability ({prob})")
+                    return
+            except ValueError:
+                print(f"Cronjob Error: Invalid probability value {probability}")
+                
         try:
             if not os.path.exists(prompt_file):
                 print(f"Cronjob Error: Prompt file not found at {prompt_file}")

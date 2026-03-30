@@ -192,6 +192,7 @@ prompt = "cronjobs/daily_summary.md"         # Path to the prompt file
 channel_id = "123456789012345678"            # Discord Channel ID (find in https://discord.com/channels/server_id/channel_id)
 mention_user_id = "123456789012345678"       # Optional: Your User ID to join the thread automatically
 silent = false                               # Optional: Set to true to run the job silently without sending Discord messages
+probability = 1.0                            # Optional: Probability of execution (0.0 to 1.0)
 ```
 
 ### 📖 Tutorial: How to find your Discord User ID

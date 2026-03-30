@@ -52,3 +52,4 @@ sandbox = false
 # channel_id = "channel id"
 # mention_user_id = "your user id"
 # silent = false
+# probability = 1.0
