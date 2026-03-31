@@ -84,31 +84,27 @@ async def test_send_long_message_mixed_split(bot_instance):
 @pytest.mark.asyncio
 async def test_send_long_message_with_mention(bot_instance):
     channel = AsyncMock()
-    content = "Hello\nWorld"
-    author_id = "123"
-    prefix = f"<@{author_id}> " if author_id else ""
-    sender = StreamSender(bot_instance, channel, prefix)
+    content = "<@123> Hello\nWorld"
+    sender = StreamSender(bot_instance, channel)
     await sender.send(content, flush=True)
     # Should be sent in one go if it fits
-    channel.send.assert_called_once_with(f"<@123> {content}")
+    channel.send.assert_called_once_with(content)
 
 @pytest.mark.asyncio
 async def test_send_long_message_split_with_mention(bot_instance):
     channel = AsyncMock()
     # line1 fits but adding line2 overflows
-    line1 = "a" * 1500 + "\n"
+    line1 = "<@123> " + "a" * 1500 + "\n"
     line2 = "b" * 500
     content = line1 + line2
-    author_id = "123"
     
-    prefix = f"<@{author_id}> " if author_id else ""
-    sender = StreamSender(bot_instance, channel, prefix)
+    sender = StreamSender(bot_instance, channel)
     await sender.send(content, flush=True)
     
     assert channel.send.call_count == 2
     calls = channel.send.call_args_list
     # First chunk has mention
-    assert calls[0][0][0] == f"<@123> {line1}"
+    assert calls[0][0][0] == line1
     # Second chunk does NOT have mention
     assert calls[1][0][0] == line2
 
@@ -258,7 +254,8 @@ async def test_process_pending_messages_with_yolo_prompt(bot_instance):
             # Also verify that the prompt passed to Gemini is just "Hello", not "-y Hello"
             # It should be passed after -p
             p_index = args.index('-p')
-            assert args[p_index + 1] == 'TestUser: Hello'
+            prompt_arg = args[p_index + 1]
+            assert prompt_arg.startswith('Hello\n--- Message Above From TestUser <@789> at ')
 
 @pytest.mark.asyncio
 async def test_process_pending_messages_with_attachments(bot_instance):
@@ -295,9 +292,10 @@ async def test_process_pending_messages_with_attachments(bot_instance):
             p_index = args.index('-p')
             prompt_arg = args[p_index + 1]
             
-            assert 'TestUser: Analyze this' in prompt_arg
+            assert prompt_arg.startswith('Analyze this')
             assert 'Attachments:' in prompt_arg
             assert '- attachments/file1.txt' in prompt_arg
+            assert '--- Message Above From TestUser <@789> at ' in prompt_arg
 
 @pytest.mark.asyncio
 async def test_process_pending_messages_timeout(bot_instance):

@@ -32,13 +32,11 @@ class StreamSender:
             return text[:last_newline+1], text[last_newline+1:]
         return text[:max_len], text[max_len:]
 
-    def __init__(self, bot, channel, prefix=""):
+    def __init__(self, bot, channel):
         self.bot = bot
         self.channel = channel
-        self.prefix = prefix
         self.msg_to_edit = None  # Reference to the active message we are editing during streaming
         self.current_chunk = ""  # Accumulated text that hasn't been finalized yet
-        self.is_first_chunk = True # Flag to ensure prefix is only added once
         self.streamed = False      # Marker if we actually streamed or just sent static
 
     async def send(self, text=None, flush=False):
@@ -55,9 +53,8 @@ class StreamSender:
             if len(self.current_chunk) > self.bot.max_response_length:
                 # It overflowed! Split elegantly and finalize the first part.
                 first_part, residue = self._split_elegant(self.current_chunk)
-                final_text = self.prefix + first_part if self.is_first_chunk else first_part
+                final_text = first_part
                 await self.msg_to_edit.edit(content=final_text)
-                self.is_first_chunk = False
                 
                 # Use smart chunks for residue (it might still be huge, so split it further)
                 self.msg_to_edit, last_text = await self.send_smart_chunks(residue, incomplete=not flush)
@@ -65,7 +62,7 @@ class StreamSender:
             else:
                 # Fits in one message! Just edit it.
                 suffix = "" if flush else " (incomplete)"
-                final_text = self.prefix + self.current_chunk if self.is_first_chunk else self.current_chunk
+                final_text = self.current_chunk
                 await self.msg_to_edit.edit(content=final_text + suffix)
                 if flush:
                     self.current_chunk = ""
@@ -112,9 +109,8 @@ class StreamSender:
             return None
         
         suffix = " (incomplete)" if is_last and incomplete else ""
-        content = self.prefix + clean_chunk + suffix if self.is_first_chunk else clean_chunk + suffix
+        content = clean_chunk + suffix
         msg = await self.channel.send(content)
-        self.is_first_chunk = False
         return msg
 
 class GeminiClawBot(commands.Bot):
@@ -383,7 +379,7 @@ class GeminiClawBot(commands.Bot):
                     # NOTE: the msg is in reverse time order
                     content = msg.clean_content.strip()
                     if content:
-                        history_text = f"{msg.author.display_name}: {content}\n" + history_text
+                        history_text = f"{content}\n--- Message Above From {msg.author.display_name} <@{msg.author.id}> ---\n" + history_text
                 # Try to fetch the starter message from the parent channel
                 if hasattr(message.channel, 'parent') and message.channel.parent:
                     try:
@@ -391,8 +387,10 @@ class GeminiClawBot(commands.Bot):
                         # Ensure we don't accidentally duplicate if it was yielded by history
                         if starter_msg and starter_msg.id != message.id:
                             content = starter_msg.clean_content.strip()
-                            if content and not history_text.startswith(f"{starter_msg.author.display_name}: {content}"):
-                                history_text = f"{starter_msg.author.display_name}: {content}\n" + history_text
+                            if content:
+                                starter_sig = f"{content}\n--- Message Above From {starter_msg.author.display_name} <@{starter_msg.author.id}> ---\n"
+                                if not history_text.startswith(starter_sig):
+                                    history_text = starter_sig + history_text
                     except Exception as e:
                         pass
                 
@@ -456,6 +454,32 @@ class GeminiClawBot(commands.Bot):
         await message.add_reaction('✅')
 
 
+    def _get_channel_users_str(self, channel):
+        """Extract a formatted string of up to 5 user mentions from the channel."""
+        user_list_str = ""
+        try:
+            members = []
+            if getattr(channel, 'type', None) == discord.ChannelType.private:
+                if hasattr(channel, 'recipient') and channel.recipient:
+                    members = [channel.recipient]
+            elif hasattr(channel, 'members') and not isinstance(channel, discord.Thread):
+                members = channel.members
+            elif hasattr(channel, 'parent') and hasattr(channel.parent, 'members'):
+                members = channel.parent.members
+            elif hasattr(channel, 'guild') and hasattr(channel.guild, 'members'):
+                members = channel.guild.members
+            
+            valid_members = [m for m in members if m.id != self.user.id]
+            if valid_members:
+                user_lines = []
+                for m in valid_members[:5]:
+                    name = getattr(m, 'display_name', getattr(m, 'name', 'Unknown'))
+                    user_lines.append(f"  - {name} <@{m.id}>")
+                user_list_str = "Here are some users in this channel you can mention:\n" + "\n".join(user_lines) + "\n"
+        except Exception:
+            pass
+        return user_list_str
+
     async def _execute_gemini_command(self, prompt, channel_id, author_id, channel):
         """Prepare prompts and execute the Gemini CLI as a subprocess."""
         gemini_exec = self.gemini_config.get('executable_path', 'gemini')
@@ -498,11 +522,14 @@ class GeminiClawBot(commands.Bot):
                 author = await self.fetch_user(author_id_int)
         except Exception:
             pass
-        author_name = author.display_name if author else f"<@{author_id}>"
+        author_name = f"{author.display_name} <@{author_id}>" if author else f"<@{author_id}>"
 
+        timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
         if author_id != str(self.user.id):
-            if not prompt.startswith('[Previous Context]'):
-                prompt = f"{author_name}: {prompt}"
+            prompt = (
+                f"{prompt}\n"
+                f"--- Message Above From {author_name} at {timestamp} ---\n"
+            )
         args.extend(['-p', prompt])
         
         system_prompt_content = ""
@@ -542,13 +569,17 @@ class GeminiClawBot(commands.Bot):
                         except Exception as e:
                             print(f"Warning: Failed to read user prompt from {full_path}: {e}")
         
+        user_list_str = self._get_channel_users_str(channel)
+
         discord_instructions = (
             "---BEGIN DISCORD INSTRUCTIONS---\n"
             "You are chatting with the user in a discord channel.\n"
-            f"Your discord user name is <@{self.user.name}>.\n"
+            f"Your own discord user name and id is {self.user.name} <@{self.user.id}>.\n"
             "If you want to send a file to the user as an attachment, "
             "use the exact syntax: [attachment: path/to/file].\n"
             "The bot will extract this tag and upload the file to Discord.\n"
+            f"{user_list_str}"
+            "When you need to mention a user, use the strict syntax with the integer user id: <@user_id>\n"
             "---END DISCORD INSTRUCTIONS---\n\n"
         )
         system_prompt_content += discord_instructions
@@ -599,19 +630,7 @@ class GeminiClawBot(commands.Bot):
         """Read output stream from Gemini process, send chunks to Discord, and return final response."""
         final_response = ""
         
-        # Try to find the starter message author if we are in a thread
-        starter_author_id = None
-        if channel and isinstance(channel, discord.Thread):
-            try:
-                starter_msg = await channel.parent.fetch_message(channel.id)
-                starter_author_id = str(starter_msg.author.id)
-            except Exception:
-                pass
-        
-        reply_author_id = author_id if (author_id != str(self.user.id) and author_id != starter_author_id) else None
-        prefix = f"<@{reply_author_id}>\n" if reply_author_id else ""
-        
-        sender = StreamSender(self, channel, prefix)
+        sender = StreamSender(self, channel)
 
         async def read_stream():
             nonlocal final_response
