@@ -650,11 +650,11 @@ class GeminiClawBot(commands.Bot):
                         final_response += content
                         await sender.send(content)
                     elif parsed.get("type") == "result":
-                        pass
+                        print("===result", parsed)
                     elif parsed.get("session_id"):
                         db.set_thread_session(channel.id, parsed.get("session_id"))
                 except json.JSONDecodeError:
-                    pass
+                    print("===json error", line_str)
 
         try:
             async with channel.typing():

@@ -207,3 +207,9 @@ To automatically join threads created by cronjobs, populate the `mention_user_id
    - Right-click your **avatar/name** in any member list or chat.
    - Click **Copy User ID** at the bottom of the menu.
 
+## Tutorials
+
+For more advanced usage, check out our dedicated tutorials:
+- [Role Playing with Custom Prompts and Discord Topics](tutorials/role_playing.md)
+- [Memory Management using GeminiClawDock](tutorials/memory_management.md)
+- [Automatic Backup and Maintenance using Cronjobs](tutorials/automatic_backup.md)
