@@ -576,10 +576,11 @@ class GeminiClawBot(commands.Bot):
                             with open(full_path, "r") as f:
                                 content = f.read().strip()
                             if content:
+                                filename = os.path.basename(path)
                                 system_prompt_content += (
-                                    f"---BEGIN {path}---\n"
+                                    f"---BEGIN {filename}---\n"
                                     f"{content}\n"
-                                    f"---END {path}---\n\n"
+                                    f"---END {filename}---\n\n"
                                 )
                         except Exception as e:
                             print(f"Warning: Failed to read user prompt from {full_path}: {e}")
