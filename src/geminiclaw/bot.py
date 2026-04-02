@@ -728,6 +728,7 @@ class GeminiClawBot(commands.Bot):
                     if parsed.get("type") == "message" and parsed.get("role") == "assistant":
                         content = parsed.get("content", "")
                         final_response += content
+                        print("===message (at most 100 chars):", content[:100])
                         await sender.send(content)
                     elif parsed.get("type") == "result":
                         print("===result", parsed)
