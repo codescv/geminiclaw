@@ -114,12 +114,13 @@ class StreamSender:
         return msg
 
 class GeminiClawBot(commands.Bot):
-    def __init__(self, gemini_config, cronjobs=None, prompt_config=None, always_reply=None, max_response_length=1900, policy=None, *args, **kwargs):
+    def __init__(self, gemini_config, cronjobs=None, prompt_config=None, always_reply=None, stream_off_channels=None, max_response_length=1900, policy=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.gemini_config = gemini_config
         self.cronjobs = cronjobs or []
         self.prompt_config = prompt_config or {}
         self.always_reply = always_reply or []
+        self.stream_off_channels = stream_off_channels or []
         self.policy = policy or []
         self.max_response_length = max_response_length
         self.scheduler = AsyncIOScheduler()
@@ -425,6 +426,9 @@ class GeminiClawBot(commands.Bot):
                         target_channel_id = existing_thread.id
                         db.set_thread_active(target_channel_id, True)
                         print(f"Joined existing thread ({target_channel_id})")
+                    else:
+                        print("Thread error.")
+                        return
                 except Exception as fetch_error:
                     print(f"Failed to fetch existing thread: {fetch_error}")
 
@@ -480,6 +484,12 @@ class GeminiClawBot(commands.Bot):
             pass
         return user_list_str
 
+    def _is_stream_off(self, channel_id, channel=None):
+        stream_off = str(channel_id) in self.stream_off_channels
+        if channel and isinstance(channel, discord.Thread) and getattr(channel, 'parent_id', None):
+            stream_off = stream_off or (str(channel.parent_id) in self.stream_off_channels)
+        return stream_off
+
     async def _execute_gemini_command(self, prompt, channel_id, author_id, channel):
         """Prepare prompts and execute the Gemini CLI as a subprocess."""
         gemini_exec = self.gemini_config.get('executable_path', 'gemini')
@@ -501,8 +511,11 @@ class GeminiClawBot(commands.Bot):
         thread_session = db.get_thread_session(channel_id)
         if thread_session:
             args.extend(['-r', thread_session])
-                
-        args.extend(['-o', 'stream-json'])
+        
+        if self._is_stream_off(channel_id, channel):
+            args.extend(['-o', 'json'])
+        else:
+            args.extend(['-o', 'stream-json'])
             
         include_dirs = self.gemini_config.get('include_directories', [])
         for inc_dir in include_dirs:
@@ -625,6 +638,71 @@ class GeminiClawBot(commands.Bot):
             start_new_session=True
         )
         return process, system_prompt_path
+
+    async def _get_gemini_output(self, process, channel, author_id, msg_id_db, timeout_seconds):
+        """Read full output from Gemini process when finished and send to Discord."""
+        final_response = ""
+        error = ""
+        
+        try:
+            async with channel.typing():
+                stdout_bytes, stderr_bytes = await asyncio.wait_for(process.communicate(), timeout=timeout_seconds)
+                output = stdout_bytes.decode().strip()
+                error = stderr_bytes.decode().strip()
+                
+                if output:
+                    try:
+                        parsed = json.loads(output)
+                        if isinstance(parsed, dict):
+                            response_text = parsed.get("response", "")
+                            if response_text:
+                                final_response = response_text
+                            
+                            if parsed.get("session_id"):
+                                db.set_thread_session(channel.id, parsed.get("session_id"))
+                    except json.JSONDecodeError:
+                        print("===json error", output)
+                        
+            if not final_response:
+                if isinstance(process.returncode, int) and process.returncode < 0:
+                    final_response = "Stopped by user."
+                elif error:
+                    final_response = f"Error: {error}"
+                else:
+                    final_response = "Gemini completed but returned no output."
+                    
+        except asyncio.TimeoutError:
+            try:
+                if isinstance(process.pid, int):
+                    os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            final_response = f"Error: Gemini command timed out after {timeout_seconds} seconds."
+
+        if final_response:
+            clean_text = re.sub(r'\[attachment:\s*.*?\]', '', final_response)
+            if clean_text.strip():
+                lines = clean_text.splitlines(keepends=True)
+                chunk = ""
+                for line in lines:
+                    if len(chunk) + len(line) <= self.max_response_length:
+                        chunk += line
+                    else:
+                        if chunk.strip():
+                            await channel.send(chunk)
+                        
+                        residue = line
+                        while len(residue) > self.max_response_length:
+                            part = residue[:self.max_response_length]
+                            if part.strip():
+                                await channel.send(part)
+                            residue = residue[self.max_response_length:]
+                        chunk = residue
+                        
+                if chunk.strip():
+                    await channel.send(chunk)
+
+        return final_response
 
     async def _stream_gemini_output(self, process, channel, author_id, msg_id_db, timeout_seconds):
         """Read output stream from Gemini process, send chunks to Discord, and return final response."""
@@ -773,7 +851,11 @@ class GeminiClawBot(commands.Bot):
             print('====')
             
             timeout_seconds = self.gemini_config.get('timeout', 600)
-            final_response = await self._stream_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds)
+            
+            if self._is_stream_off(row['channel_id'], channel):
+                final_response = await self._get_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds)
+            else:
+                final_response = await self._stream_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds)
 
             db.update_message_status(msg_id_db, 'completed', final_response)
             
@@ -812,7 +894,17 @@ def main():
     intents = discord.Intents.default()
     intents.message_content = True
 
-    bot = GeminiClawBot(gemini_config=config.gemini, cronjobs=config.cronjobs, prompt_config=config.prompt, always_reply=config.always_reply, policy=config.policy, command_prefix="!", intents=intents, proxy=config.proxy)
+    bot = GeminiClawBot(
+        gemini_config=config.gemini,
+        cronjobs=config.cronjobs,
+        prompt_config=config.prompt,
+        always_reply=config.always_reply,
+        stream_off_channels=config.stream_off_channels,
+        policy=config.policy,
+        command_prefix="!",
+        intents=intents,
+        proxy=config.proxy
+    )
     bot.run(config.token)
 
 if __name__ == "__main__":

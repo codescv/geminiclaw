@@ -28,6 +28,7 @@ class Config:
         self.policy = self.gemini.get("policy", [])
  
         self.always_reply = self.discord.get("always_reply", [])
+        self.stream_off_channels = [str(c) for c in self.discord.get("stream_off_channels", [])]
         
         self.token = self.discord.get("token") or os.getenv("DISCORD_TOKEN")
         if not self.token:
