@@ -162,7 +162,8 @@ class GeminiClawBot(commands.Bot):
     async def generate_thread_summary(self, prompt):
         """Get a summary for a thread."""
         # Use just a simple truncation for better speed for now.
-        return re.sub((r'\s*' f'@{self.user.name}' r'\s*'), '', prompt)[:30]
+        summary = re.sub((r'\s*' f'@{self.user.name}' r'\s*'), '', prompt)[:30]
+        return summary if len(summary) > 1 else "Thread"
 
     async def get_gemini_session_summary(self, session_id):
         """Get the summary for a session from gemini --list-sessions."""
@@ -416,7 +417,7 @@ class GeminiClawBot(commands.Bot):
                 db.set_thread_active(thread.id, True)
                 print(f"Created thread {thread_name} ({thread.id})")
             except Exception as e:
-                print(f"Failed to create thread: {e}")
+                print(f"Failed to create thread: {e} thread name: {thread_name}")
                 try:
                     existing_thread = message.channel.get_thread(message.id)
                     if not existing_thread and message.guild:
@@ -431,6 +432,7 @@ class GeminiClawBot(commands.Bot):
                         return
                 except Exception as fetch_error:
                     print(f"Failed to fetch existing thread: {fetch_error}")
+                    return
 
         attachments_paths = []
         if message.attachments:
