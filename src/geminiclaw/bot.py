@@ -804,20 +804,14 @@ class GeminiClawBot(commands.Bot):
                         await channel.send(f"Failed to send some attachments: {e}")
 
 
-    @tasks.loop(seconds=5)
-    async def process_pending_messages(self):
-        """Polls the database for pending messages and processes them."""
-        row = db.get_pending_message()
-        if not row:
-            return
-
+    async def _process_single_message(self, row):
+        """Processes a single pending message."""
         msg_id_db = row['id']
         channel_id = int(row['channel_id'])
         prompt = row['prompt']
         author_id = row['author_id']
         attachments_json = row['attachments'] if 'attachments' in row.keys() else None
 
-        db.update_message_status(msg_id_db, 'processing')
         print(f"====Processing message {msg_id_db}: {prompt[:120]}\n====")
         
         # Handle inbound attachments
@@ -842,6 +836,7 @@ class GeminiClawBot(commands.Bot):
             except Exception:
                 print(f"Could not fetch channel {channel_id}, skipping message.")
                 db.update_message_status(msg_id_db, 'failed', 'Channel not found or deleted')
+                self.running_processes.pop(str(row['channel_id']), None)
                 return
 
         system_prompt_path = None
@@ -890,6 +885,26 @@ class GeminiClawBot(commands.Bot):
                     print(f"Cleaned up system prompt file: {system_prompt_path}")
                 except Exception as e:
                     print(f"Failed to remove temp system prompt file {system_prompt_path}: {e}")
+
+    @tasks.loop(seconds=5)
+    async def process_pending_messages(self):
+        """Polls the database for pending messages and processes them concurrently."""
+        while True:
+            try:
+                busy_threads = list(self.running_processes.keys())
+                row = db.get_next_processable_message(busy_threads)
+                if not row:
+                    break
+
+                msg_id_db = row['id']
+                db.update_message_status(msg_id_db, 'processing')
+                self.running_processes[str(row['channel_id'])] = None # Placeholder to mark busy
+                
+                print('create task for row:', row)
+                asyncio.create_task(self._process_single_message(row))
+            except Exception as e:
+                print(f"Error in process_pending_messages loop: {e}")
+                break # Exit loop for this interval, will retry in 5 seconds
 
 def main():
     config = Config()

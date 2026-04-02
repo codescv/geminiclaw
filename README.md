@@ -29,7 +29,7 @@ Instead of building a new agent from scratch, Gemini Claw leverages the power of
 
 ## Architecture
 
-Gemini Claw uses a robust SQLite-backed architecture to decouple the Discord bot from the Gemini CLI execution. This ensures that no messages are lost, even if a complex command takes a long time to run.
+Gemini Claw uses a robust SQLite-backed architecture to decouple the Discord bot from the Gemini CLI execution. Messages are processed concurrently across different channels/threads, but serially within the same thread to ensure consistency. This ensures that no messages are lost, even if a complex command takes a long time to run.
 
 ```text
 Inbound Channels (Discord) -> SQLite Database -> Polling loop (Python async task) -> Gemini CLI Subprocess -> Outbound Response

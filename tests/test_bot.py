@@ -1,4 +1,5 @@
 import pytest
+import asyncio
 from unittest.mock import AsyncMock
 import sys
 import os
@@ -116,13 +117,13 @@ async def test_process_pending_messages_with_topic(bot_instance):
     
     # Mock db methods in the bot's imported db module
     with patch('geminiclaw.bot.db') as mock_db:
-        mock_db.get_pending_message.return_value = {
+        mock_db.get_next_processable_message.side_effect = [{
             'id': 1,
             'channel_id': '123456',
             'prompt': 'Hello',
             'author_id': '789',
             'status': 'pending'
-        }
+        }, None]
         mock_db.get_thread_session.return_value = None
         
         # Mock channel using spec to pass isinstance check
@@ -148,6 +149,13 @@ async def test_process_pending_messages_with_topic(bot_instance):
             # Run
             await bot_instance.process_pending_messages()
             
+            # Wait for background task
+            import time
+            start = time.time()
+            while bot_instance.running_processes and time.time() - start < 5:
+                await asyncio.sleep(0.1)
+            await asyncio.sleep(0.5)
+            
             # Verify env has GEMINI_SYSTEM_MD
             args, kwargs = mock_exec.call_args
             env = kwargs.get('env')
@@ -167,13 +175,13 @@ async def test_process_pending_messages_cli_home(bot_instance):
     bot_instance.gemini_config['cli_home'] = '/custom/path/home'
 
     with patch('geminiclaw.bot.db') as mock_db:
-        mock_db.get_pending_message.return_value = {
+        mock_db.get_next_processable_message.side_effect = [{
             'id': 1,
             'channel_id': '123456',
             'prompt': 'Hello',
             'author_id': '789',
             'status': 'pending'
-        }
+        }, None]
         mock_db.get_thread_session.return_value = None
         
         bot_instance.get_channel = AsyncMock(return_value=None)
@@ -185,6 +193,12 @@ async def test_process_pending_messages_cli_home(bot_instance):
             mock_exec.return_value = process
             
             await bot_instance.process_pending_messages()
+            
+            # Wait for background task
+            import time
+            start = time.time()
+            while bot_instance.running_processes and time.time() - start < 5:
+                await asyncio.sleep(0.1)
             
             args, kwargs = mock_exec.call_args
             env = kwargs.get('env')
@@ -198,13 +212,13 @@ async def test_process_pending_messages_with_yolo_config(bot_instance):
     bot_instance.gemini_config['yolo'] = True
 
     with patch('geminiclaw.bot.db') as mock_db:
-        mock_db.get_pending_message.return_value = {
+        mock_db.get_next_processable_message.side_effect = [{
             'id': 1,
             'channel_id': '123456',
             'prompt': 'Hello',
             'author_id': '789',
             'status': 'pending'
-        }
+        }, None]
         mock_db.get_thread_session.return_value = None
         
         bot_instance.get_channel = AsyncMock(return_value=None)
@@ -217,6 +231,12 @@ async def test_process_pending_messages_with_yolo_config(bot_instance):
             
             await bot_instance.process_pending_messages()
             
+            # Wait for background task
+            import time
+            start = time.time()
+            while bot_instance.running_processes and time.time() - start < 5:
+                await asyncio.sleep(0.1)
+            
             args, _ = mock_exec.call_args
             assert '-y' in args
 
@@ -225,13 +245,13 @@ async def test_process_pending_messages_with_yolo_prompt(bot_instance):
     from unittest.mock import patch, AsyncMock
     
     with patch('geminiclaw.bot.db') as mock_db:
-        mock_db.get_pending_message.return_value = {
+        mock_db.get_next_processable_message.side_effect = [{
             'id': 1,
             'channel_id': '123456',
             'prompt': '-y Hello',
             'author_id': '789',
             'status': 'pending'
-        }
+        }, None]
         mock_db.get_thread_session.return_value = None
         
         bot_instance.get_channel = AsyncMock(return_value=None)
@@ -248,6 +268,12 @@ async def test_process_pending_messages_with_yolo_prompt(bot_instance):
             mock_exec.return_value = process
             
             await bot_instance.process_pending_messages()
+            
+            # Wait for background task
+            import time
+            start = time.time()
+            while bot_instance.running_processes and time.time() - start < 5:
+                await asyncio.sleep(0.1)
             
             args, _ = mock_exec.call_args
             assert '-y' in args
@@ -262,14 +288,14 @@ async def test_process_pending_messages_with_attachments(bot_instance):
     from unittest.mock import patch, AsyncMock
     
     with patch('geminiclaw.bot.db') as mock_db:
-        mock_db.get_pending_message.return_value = {
+        mock_db.get_next_processable_message.side_effect = [{
             'id': 1,
             'channel_id': '123456',
             'prompt': 'Analyze this',
             'author_id': '789',
             'status': 'pending',
             'attachments': '["attachments/file1.txt"]'
-        }
+        }, None]
         mock_db.get_thread_session.return_value = None
         
         bot_instance.get_channel = AsyncMock(return_value=None)
@@ -287,6 +313,12 @@ async def test_process_pending_messages_with_attachments(bot_instance):
             mock_exec.return_value = process
             
             await bot_instance.process_pending_messages()
+            
+            # Wait for background task
+            import time
+            start = time.time()
+            while bot_instance.running_processes and time.time() - start < 5:
+                await asyncio.sleep(0.1)
             
             args, _ = mock_exec.call_args
             p_index = args.index('-p')
@@ -303,13 +335,13 @@ async def test_process_pending_messages_timeout(bot_instance):
     import asyncio
     
     with patch('geminiclaw.bot.db') as mock_db:
-        mock_db.get_pending_message.return_value = {
+        mock_db.get_next_processable_message.side_effect = [{
             'id': 1,
             'channel_id': '123456',
             'prompt': 'Hello',
             'author_id': '789',
             'status': 'pending'
-        }
+        }, None]
         
         from unittest.mock import MagicMock
         channel = AsyncMock()
@@ -325,6 +357,12 @@ async def test_process_pending_messages_timeout(bot_instance):
             with patch('geminiclaw.bot.asyncio.wait_for', side_effect=asyncio.TimeoutError):
                 await bot_instance.process_pending_messages()
                 
+            # Wait for background task
+            import time
+            start = time.time()
+            while bot_instance.running_processes and time.time() - start < 5:
+                await asyncio.sleep(0.1)
+                
             # Verify status update
             mock_db.update_message_status.assert_any_call(1, 'completed', 'Error: Gemini command timed out after 600 seconds.')
 
@@ -333,13 +371,13 @@ async def test_process_pending_messages_json_error(bot_instance):
     from unittest.mock import patch, AsyncMock
     
     with patch('geminiclaw.bot.db') as mock_db:
-        mock_db.get_pending_message.return_value = {
+        mock_db.get_next_processable_message.side_effect = [{
             'id': 1,
             'channel_id': '123456',
             'prompt': 'Hello',
             'author_id': '789',
             'status': 'pending'
-        }
+        }, None]
         
         from unittest.mock import MagicMock
         channel = AsyncMock()
@@ -355,6 +393,12 @@ async def test_process_pending_messages_json_error(bot_instance):
             
             await bot_instance.process_pending_messages()
             
+            # Wait for background task
+            import time
+            start = time.time()
+            while bot_instance.running_processes and time.time() - start < 5:
+                await asyncio.sleep(0.1)
+            
             # The JSON error is caught and ignored, so it should run to completion
             mock_db.update_message_status.assert_any_call(1, 'delivered')
 
@@ -363,13 +407,13 @@ async def test_process_pending_messages_outbound_attachments(bot_instance):
     from unittest.mock import patch, AsyncMock
     
     with patch('geminiclaw.bot.db') as mock_db:
-        mock_db.get_pending_message.return_value = {
+        mock_db.get_next_processable_message.side_effect = [{
             'id': 1,
             'channel_id': '123456',
             'prompt': 'Hello',
             'author_id': '789',
             'status': 'pending'
-        }
+        }, None]
         
         from unittest.mock import MagicMock
         channel = AsyncMock()
@@ -389,6 +433,12 @@ async def test_process_pending_messages_outbound_attachments(bot_instance):
             # Mock os.path.isfile and discord.File to avoid real file access
             with patch('os.path.isfile', return_value=True), patch('discord.File'):
                 await bot_instance.process_pending_messages()
+                
+            # Wait for background task
+            import time
+            start = time.time()
+            while bot_instance.running_processes and time.time() - start < 5:
+                await asyncio.sleep(0.1)
                 
             # It should have attempted to send the file to Discord
             assert channel.send.call_count > 0

@@ -64,6 +64,20 @@ def get_pending_message():
     conn.close()
     return row
 
+def get_next_processable_message(busy_channel_ids):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if busy_channel_ids:
+        placeholders = ', '.join('?' for _ in busy_channel_ids)
+        query = f"SELECT * FROM messages WHERE status = 'pending' AND channel_id NOT IN ({placeholders}) ORDER BY id ASC LIMIT 1"
+        cursor.execute(query, [str(cid) for cid in busy_channel_ids])
+    else:
+        cursor.execute("SELECT * FROM messages WHERE status = 'pending' ORDER BY id ASC LIMIT 1")
+    row = cursor.fetchone()
+    conn.close()
+    return row
+
+
 def update_message_status(msg_id, status, response=None):
     conn = get_db_connection()
     cursor = conn.cursor()
