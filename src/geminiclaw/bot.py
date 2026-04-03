@@ -114,8 +114,9 @@ class StreamSender:
         return msg
 
 class GeminiClawBot(commands.Bot):
-    def __init__(self, gemini_config, cronjobs=None, prompt_config=None, always_reply=None, stream_off_channels=None, max_response_length=1900, policy=None, *args, **kwargs):
+    def __init__(self, gemini_config, service_name="com.codescv.geminiclaw", cronjobs=None, prompt_config=None, always_reply=None, stream_off_channels=None, max_response_length=1900, policy=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.service_name = service_name
         self.gemini_config = gemini_config
         self.cronjobs = cronjobs or []
         self.prompt_config = prompt_config or {}
@@ -319,6 +320,14 @@ class GeminiClawBot(commands.Bot):
                 print(f"Can't find the process to kill. Channel Id: {chan_id_str}")
             return
 
+        if message.content.strip().lower() == "-restart":
+            try:
+                await message.add_reaction("🔄")
+                subprocess.Popen(["geminiclaw", "service", "restart", "--service-name", self.service_name])
+            except Exception as e:
+                print(f"Failed to run restart command: {e}")
+            return
+
         # Explicitly enforce -stop: if it's inactive, ignore all pings until -continue
         if is_thread and db.has_thread(message.channel.id) and not db.is_thread_active(message.channel.id):
             print("Thread is deactivated. Ignoring all message until -continue.")
@@ -403,8 +412,6 @@ class GeminiClawBot(commands.Bot):
         
         if not prompt and not message.attachments:
             return
-
-        print(f"====Received prompt: {prompt[:120]} from {message.author}\n====")
         
         target_channel_id = message.channel.id
 
@@ -729,7 +736,6 @@ class GeminiClawBot(commands.Bot):
                     if parsed.get("type") == "message" and parsed.get("role") == "assistant":
                         content = parsed.get("content", "")
                         final_response += content
-                        print("===message (at most 100 chars):", content[:100])
                         await sender.send(content)
                     elif parsed.get("type") == "result":
                         print("===result", parsed)
@@ -813,7 +819,7 @@ class GeminiClawBot(commands.Bot):
         author_id = row['author_id']
         attachments_json = row['attachments'] if 'attachments' in row.keys() else None
 
-        print(f"====Processing message {msg_id_db}: {prompt[:120]}\n====")
+        print(f"====Processing message from {author_id}: {prompt[:120]} (first 120 chars)\n{attachments_json}\n====")
         
         # Handle inbound attachments
         attachments = []
@@ -844,10 +850,8 @@ class GeminiClawBot(commands.Bot):
         try:
             process, system_prompt_path = await self._execute_gemini_command(prompt, row['channel_id'], author_id, channel)
             self.running_processes[str(row['channel_id'])] = process
-            
+
             print(f"====system prompt file created: {system_prompt_path}")
-            print('====prompt:', prompt[:120], f'...{len(prompt)} chars' if len(prompt) > 120 else '')
-            print('====')
             
             timeout_seconds = self.gemini_config.get('timeout', 600)
             
@@ -901,19 +905,19 @@ class GeminiClawBot(commands.Bot):
                 db.update_message_status(msg_id_db, 'processing')
                 self.running_processes[str(row['channel_id'])] = None # Placeholder to mark busy
                 
-                print('create task for row:', row)
                 asyncio.create_task(self._process_single_message(row))
             except Exception as e:
                 print(f"Error in process_pending_messages loop: {e}")
                 break # Exit loop for this interval, will retry in 5 seconds
 
-def main():
+def main(service_name="com.codescv.geminiclaw"):
     config = Config()
 
     intents = discord.Intents.default()
     intents.message_content = True
 
     bot = GeminiClawBot(
+        service_name=service_name,
         gemini_config=config.gemini,
         cronjobs=config.cronjobs,
         prompt_config=config.prompt,

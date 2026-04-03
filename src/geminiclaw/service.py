@@ -47,6 +47,8 @@ def install_macos(project_dir, geminiclaw_path, env_vars, service_name):
     <array>
         <string>{geminiclaw_path}</string>
         <string>start</string>
+        <string>--service-name</string>
+        <string>{service_name}</string>
     </array>
     <key>WorkingDirectory</key>
     <string>{project_dir}</string>
@@ -76,7 +78,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart={geminiclaw_path} start
+ExecStart={geminiclaw_path} start --service-name {service_name}
 WorkingDirectory={project_dir}
 StandardOutput=append:{project_dir}/claw.log
 StandardError=append:{project_dir}/claw.error.log

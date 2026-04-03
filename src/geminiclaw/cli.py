@@ -30,10 +30,12 @@ def init():
 
 
 @app.command(help="Start the bot directly")
-def start():
+def start(
+    service_name: str = typer.Option("com.codescv.geminiclaw", "--service-name", help="Name of the service")
+):
     from .bot import main as bot_main
-    print("Starting Gemini Claw bot...")
-    bot_main()
+    print(f"Starting Gemini Claw bot using service name {service_name}...")
+    bot_main(service_name=service_name)
 
 class ServiceAction(str, Enum):
     install = "install"

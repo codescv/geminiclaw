@@ -348,6 +348,12 @@ async def test_process_pending_messages_timeout(bot_instance):
         channel.typing = MagicMock(return_value=AsyncMock())
         bot_instance.get_channel = MagicMock(return_value=channel)
 
+        from unittest.mock import MagicMock as MM
+        bot_instance.get_user = MM()
+        mock_author = MM()
+        mock_author.display_name = 'TestUser'
+        bot_instance.get_user.return_value = mock_author
+
         with patch('asyncio.create_subprocess_exec') as mock_exec:
             process = AsyncMock()
             process.stderr.read.return_value = b""
@@ -357,11 +363,11 @@ async def test_process_pending_messages_timeout(bot_instance):
             with patch('geminiclaw.bot.asyncio.wait_for', side_effect=asyncio.TimeoutError):
                 await bot_instance.process_pending_messages()
                 
-            # Wait for background task
-            import time
-            start = time.time()
-            while bot_instance.running_processes and time.time() - start < 5:
-                await asyncio.sleep(0.1)
+                # Wait for background task inside the patch block
+                import time
+                start = time.time()
+                while bot_instance.running_processes and time.time() - start < 5:
+                    await asyncio.sleep(0.1)
                 
             # Verify status update
             mock_db.update_message_status.assert_any_call(1, 'completed', 'Error: Gemini command timed out after 600 seconds.')
@@ -434,11 +440,11 @@ async def test_process_pending_messages_outbound_attachments(bot_instance):
             with patch('os.path.isfile', return_value=True), patch('discord.File'):
                 await bot_instance.process_pending_messages()
                 
-            # Wait for background task
-            import time
-            start = time.time()
-            while bot_instance.running_processes and time.time() - start < 5:
-                await asyncio.sleep(0.1)
+                # Wait for background task inside the patch block
+                import time
+                start = time.time()
+                while bot_instance.running_processes and time.time() - start < 5:
+                    await asyncio.sleep(0.1)
                 
             # It should have attempted to send the file to Discord
             assert channel.send.call_count > 0
@@ -641,4 +647,22 @@ async def test_get_gemini_session_summary_not_found(bot_instance):
         
         summary = await bot_instance.get_gemini_session_summary("sess-5678")
         assert summary is None
+
+
+@pytest.mark.asyncio
+async def test_on_message_restart(bot_instance):
+    from unittest.mock import AsyncMock, patch
+    
+    message = AsyncMock()
+    message.content = "-restart"
+    message.channel = AsyncMock()
+    message.author.id = "67890"
+    
+    bot_instance.service_name = "custom-service"
+    
+    with patch('geminiclaw.bot.subprocess.Popen') as mock_popen:
+        await bot_instance.on_message(message)
+        
+        message.add_reaction.assert_called_once_with("🔄")
+        mock_popen.assert_called_once_with(["geminiclaw", "service", "restart", "--service-name", "custom-service"])
 
