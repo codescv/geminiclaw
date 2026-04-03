@@ -664,5 +664,5 @@ async def test_on_message_restart(bot_instance):
         await bot_instance.on_message(message)
         
         message.add_reaction.assert_called_once_with("🔄")
-        mock_popen.assert_called_once_with(["geminiclaw", "service", "restart", "--service-name", "custom-service"])
+        mock_popen.assert_called_once_with(["geminiclaw", "service", "restart", "--service-name", "custom-service"], start_new_session=True)
 

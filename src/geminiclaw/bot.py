@@ -323,7 +323,13 @@ class GeminiClawBot(commands.Bot):
         if message.content.strip().lower() == "-restart":
             try:
                 await message.add_reaction("🔄")
-                subprocess.Popen(["geminiclaw", "service", "restart", "--service-name", self.service_name])
+                subprocess.Popen([
+                    "geminiclaw", 
+                    "service", 
+                    "restart", 
+                    "--service-name", 
+                    self.service_name
+                ], start_new_session=True)
             except Exception as e:
                 print(f"Failed to run restart command: {e}")
             return
