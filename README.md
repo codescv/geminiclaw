@@ -149,6 +149,10 @@ You can configure the directory where attachments are saved in your `config.toml
 attachments_dir = "attachments"
 ```
 
+## Channel Routing
+
+The agent can route its response to a specific Discord channel instead of the current one by including the syntax `[to_channel: <channel_id>]` in its response. The bot will extract the channel ID, fetch that channel, and send the response there. The tag will be removed from the final message content.
+
 ## Always Reply (Whitelist)
 
 You can configure the bot to always reply to specific whitelisted users without requiring them to explicitly mention the bot in every message. This takes effect only if the message is not within a thread and there are no explicit mentions.

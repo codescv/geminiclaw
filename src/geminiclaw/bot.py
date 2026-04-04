@@ -217,15 +217,12 @@ class GeminiClawBot(commands.Bot):
                 print(f"Cronjob Error: Channel {channel_id} not found.")
                 return
 
-            thread_name = await self.generate_thread_summary(prompt)
-            print(f"Cronjob: Creating thread '{thread_name}' in channel {channel_id}")
-            thread = await channel.create_thread(name=thread_name)
-            await thread.send(f"🤖 *Executing cronjob...* <@{mention_user_id}>" if mention_user_id else "🤖 *Executing cronjob...*")
-            db.set_thread_active(thread.id, True)
+            if mention_user_id:
+                prompt = f"[mention:{mention_user_id}]{prompt}"
 
             # Insert with bot's ID as author to process Normally
-            db.insert_message(thread.id, "0", str(self.user.id), prompt)
-            print(f"Cronjob triggered: {prompt_file} scheduled running in thread {thread.id}")
+            db.insert_message(channel_id, "0", str(self.user.id), prompt)
+            print(f"Cronjob triggered: {prompt_file} scheduled running in channel {channel_id}")
 
         except Exception as e:
             print(f"Error running cronjob {prompt_file}: {e}")
@@ -474,7 +471,7 @@ class GeminiClawBot(commands.Bot):
             stream_off = stream_off or (str(channel.parent_id) in self.stream_off_channels)
         return stream_off
 
-    async def _execute_gemini_command(self, prompt, channel_id, author_id, channel):
+    async def _execute_gemini_command(self, prompt, channel_id, author_id, channel, is_cronjob=False):
         """Prepare prompts and execute the Gemini CLI as a subprocess."""
         gemini_exec = self.gemini_config.get('executable_path', 'gemini')
         args = [gemini_exec] # Start with the executable path
@@ -496,7 +493,7 @@ class GeminiClawBot(commands.Bot):
         if thread_session:
             args.extend(['-r', thread_session])
         
-        if self._is_stream_off(channel_id, channel):
+        if self._is_stream_off(channel_id, channel) or is_cronjob:
             args.extend(['-o', 'json'])
         else:
             args.extend(['-o', 'stream-json'])
@@ -624,7 +621,7 @@ class GeminiClawBot(commands.Bot):
         )
         return process, system_prompt_path
 
-    async def _get_gemini_output(self, process, channel, author_id, msg_id_db, timeout_seconds):
+    async def _get_gemini_output(self, process, channel, author_id, msg_id_db, timeout_seconds, is_cronjob=False, prompt="", mention_user_id=None):
         """Read full output from Gemini process when finished and send to Discord."""
         final_response = ""
         error = ""
@@ -667,6 +664,32 @@ class GeminiClawBot(commands.Bot):
         if NO_REPLY in final_response:
             return NO_REPLY
         
+        if is_cronjob and final_response:
+            try:
+                thread_name = await self.generate_thread_summary(prompt if prompt else "Cronjob")
+                thread = await channel.create_thread(name=thread_name)
+                db.set_thread_active(thread.id, True)
+                print(f"Created thread {thread_name} ({thread.id}) for cronjob")
+                await thread.send(f"🤖 *Executing cronjob...* <@{mention_user_id}>" if mention_user_id else "🤖 *Executing cronjob...*")
+                channel = thread
+            except Exception as e:
+                print(f"Failed to create thread for cronjob: {e}")
+
+        # Channel routing override
+        match = re.search(r'\[to_channel:\s*(\d+)\]', final_response)
+        if match:
+            target_id = int(match.group(1))
+            target_channel = self.get_channel(target_id)
+            if not target_channel:
+                try:
+                    target_channel = await self.fetch_channel(target_id)
+                except Exception:
+                    pass
+            if target_channel:
+                print(f"Routing response to channel {target_id}")
+                channel = target_channel
+                final_response = final_response.replace(match.group(0), "").strip()
+
         if final_response:
             clean_text = re.sub(r'\[attachment:\s*.*?\]', '', final_response)
             if clean_text.strip():
@@ -797,6 +820,14 @@ class GeminiClawBot(commands.Bot):
         author_id = row['author_id']
         attachments_json = row['attachments'] if 'attachments' in row.keys() else None
 
+        mention_user_id = None
+        if prompt.startswith("[mention:"):
+            import re
+            match = re.search(r'\[mention:(\d+)\]', prompt)
+            if match:
+                mention_user_id = match.group(1)
+                prompt = prompt[match.end():].strip()
+
         print(f"====Processing message {msg_id_db} from {author_id}: {prompt[:120]} (first 120 chars)\nattachments: {attachments_json}\n====")
         
         # Handle inbound attachments
@@ -826,22 +857,24 @@ class GeminiClawBot(commands.Bot):
 
         system_prompt_path = None
         try:
-            process, system_prompt_path = await self._execute_gemini_command(prompt, row['channel_id'], author_id, channel)
+            # Used dict(row).get to support tests that mock rows as dicts without message_id
+            is_cronjob = str(dict(row).get('message_id', '')) == "0"
+            process, system_prompt_path = await self._execute_gemini_command(prompt, row['channel_id'], author_id, channel, is_cronjob=is_cronjob)
             self.running_processes[str(row['channel_id'])] = process
 
             print(f"====system prompt file for message {msg_id_db} created: {system_prompt_path}")
             
             timeout_seconds = self.gemini_config.get('timeout', 600)
             
-            if self._is_stream_off(row['channel_id'], channel):
-                final_response = await self._get_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds)
+            if self._is_stream_off(row['channel_id'], channel) or is_cronjob:
+                final_response = await self._get_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds, is_cronjob=is_cronjob, prompt=prompt, mention_user_id=mention_user_id)
             else:
                 final_response = await self._stream_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds)
 
             db.update_message_status(msg_id_db, 'completed', final_response)
 
             if final_response == NO_REPLY:
-                print("===Skipped reply for message", msg_id_db)
+                print(f"===Skipped reply for message {msg_id_db} prompt: {prompt[:120]}\n===")
                 return
 
             # Send attachments

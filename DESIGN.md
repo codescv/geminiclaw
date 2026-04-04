@@ -14,7 +14,7 @@ Inbound Channels (e.g. Discord) -> SQLite Database -> Polling loop (Python async
 
 **1. Channels (Discord Bot)**
 - **Inbound:** Listens for mentions, whitelisted users (if not in a thread and no explicit mentions), or specific commands in a Discord channel using `discord.py`. Parses the user's message and inserts it into an SQLite database with a status of `pending`.
-- **Outbound:** An asynchronous task running alongside the bot continuously polls the SQLite database for messages marked as `completed` or `failed`. Once found, it sends the stored response back to the corresponding Discord channel and updates the record to `delivered`.
+- **Outbound:** An asynchronous task running alongside the bot continuously polls the SQLite database for messages marked as `completed` or `failed`. Once found, it sends the stored response back to the corresponding Discord channel (or the channel specified via `[to_channel: <channel_id>]` in the response override) and updates the record to `delivered`.
 
 **2. Database Layer**
 - SQLite is used as a decoupling layer to ensure message durability if the execution takes a long time or the bot crashes.
@@ -50,7 +50,7 @@ Inbound Channels (e.g. Discord) -> SQLite Database -> Polling loop (Python async
  
 **6. Cronjobs Management**
 - **Triggering**: Periodically triggers based on `cron` schedule expressions using `apscheduler`. It also supports an optional `probability` parameter to randomly skip executions based on a given float chance.
-- **Flow**: Reads a prompt file and inserts a **pending message** into the SQLite database with the thread's ID (or creates a thread) and sets the `author_id` to the bot's own ID. If the cronjob has `silent` set to true, it will insert a silent message and skip thread creation.
+- **Flow**: Reads a prompt file and inserts a **pending message** into the SQLite database with the target channel's ID and sets the `author_id` to the bot's own ID. Thread creation is deferred until a successful response is received (avoiding empty threads on `NO_REPLY`). Cronjobs always run with streaming disabled.
 - **Processing**: The standard async polling loop automatically picks this up, executes it with the Gemini agent, and delivers the response into the thread just like a normal user prompt. For silent messages, execution happens in the background without any Discord interaction. This decouples scheduling from execution logic.
  
 ## Process Management

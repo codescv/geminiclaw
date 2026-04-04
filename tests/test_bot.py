@@ -654,3 +654,25 @@ async def test_generate_thread_summary(bot_instance):
     summary = await bot_instance.generate_thread_summary("@GeminiClaw \n\nHello after mention\nLine 2")
     assert summary == "Hello after mention"
 
+@pytest.mark.asyncio
+async def test_run_cronjob(bot_instance):
+    from unittest.mock import patch, MagicMock
+    import os
+    
+    prompt_file = "/tmp/test_cronjob_prompt.txt"
+    with open(prompt_file, "w") as f:
+        f.write("TestData")
+        
+    try:
+        with patch('geminiclaw.bot.db') as mock_db:
+            channel = AsyncMock(spec=discord.TextChannel)
+            bot_instance.get_channel = MagicMock(return_value=channel)
+            
+            await bot_instance.run_cronjob(prompt_file, "123456", mention_user_id="789")
+            
+            mock_db.insert_message.assert_called_once_with("123456", "0", str(bot_instance.user.id), "[mention:789]TestData")
+            assert channel.create_thread.call_count == 0
+    finally:
+        if os.path.exists(prompt_file):
+            os.remove(prompt_file)
+
