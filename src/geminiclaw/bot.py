@@ -16,6 +16,8 @@ from .config import Config
 
 # Maximum output buffer size (for Gemini CLI output)
 OUTPUT_BUFFER_LIMIT = 2 ** 20  # 1MB
+# This is a special message returned by LLM to indicate the message should not be forwarded to user.
+NO_REPLY = "NO_REPLY"
 
 class StreamSender:
     """Handles sending long text responses to Discord with smart chunking and streaming edits."""
@@ -662,6 +664,9 @@ class GeminiClawBot(commands.Bot):
                 pass
             final_response = f"Error: Gemini command timed out after {timeout_seconds} seconds."
 
+        if NO_REPLY in final_response:
+            return NO_REPLY
+        
         if final_response:
             clean_text = re.sub(r'\[attachment:\s*.*?\]', '', final_response)
             if clean_text.strip():
@@ -792,7 +797,7 @@ class GeminiClawBot(commands.Bot):
         author_id = row['author_id']
         attachments_json = row['attachments'] if 'attachments' in row.keys() else None
 
-        print(f"====Processing message from {author_id}: {prompt[:120]} (first 120 chars)\n{attachments_json}\n====")
+        print(f"====Processing message {msg_id_db} from {author_id}: {prompt[:120]} (first 120 chars)\nattachments: {attachments_json}\n====")
         
         # Handle inbound attachments
         attachments = []
@@ -824,7 +829,7 @@ class GeminiClawBot(commands.Bot):
             process, system_prompt_path = await self._execute_gemini_command(prompt, row['channel_id'], author_id, channel)
             self.running_processes[str(row['channel_id'])] = process
 
-            print(f"====system prompt file created: {system_prompt_path}")
+            print(f"====system prompt file for message {msg_id_db} created: {system_prompt_path}")
             
             timeout_seconds = self.gemini_config.get('timeout', 600)
             
@@ -834,6 +839,10 @@ class GeminiClawBot(commands.Bot):
                 final_response = await self._stream_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds)
 
             db.update_message_status(msg_id_db, 'completed', final_response)
+
+            if final_response == NO_REPLY:
+                print("===Skipped reply for message", msg_id_db)
+                return
 
             # Send attachments
             await self._handle_outbound_attachments(final_response, channel, self.cwd)
