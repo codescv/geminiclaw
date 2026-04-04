@@ -162,46 +162,10 @@ class GeminiClawBot(commands.Bot):
 
     async def generate_thread_summary(self, prompt):
         """Get a summary for a thread."""
-        # Use just a simple truncation for better speed for now.
-        summary = re.sub((r'\s*' f'@{self.user.name}' r'\s*'), '', prompt)[:30]
-        return summary if len(summary) > 1 else "Thread"
-
-    async def get_gemini_session_summary(self, session_id):
-        """Get the summary for a session from gemini --list-sessions."""
-        if not session_id:
-            return None
-            
-        gemini_exec = self.gemini_config.get('executable_path', 'gemini')
-        args = [gemini_exec, '--list-sessions']
-        
-        env = os.environ.copy()
-        if self.gemini_config.get('cli_home') is not None:
-            env['GEMINI_CLI_HOME'] = str(self.gemini_config['cli_home'])
-
-        try:
-            process = await asyncio.create_subprocess_exec(
-                *args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=self.cwd,
-                env=env
-            )
-            stdout, stderr = await process.communicate()
-            if process.returncode != 0:
-                print(f"Error listing sessions: {stderr.decode().strip()}")
-                return None
-                
-            output = stdout.decode()
-            for line in output.splitlines():
-                if session_id in line:
-                    match = re.search(r'^\s*\d+\.\s*(.+?)\s*\([^)]+\)\s*\[([^\]]+)\]', line)
-                    if match:
-                        return match.group(1).strip()
-            return None
-        except Exception as e:
-            print(f"Failed to get session summary: {e}")
-            return None
-
+        cleaned = re.sub((r'\s*' f'@{self.user.name}' r'\s*'), '', prompt)
+        lines = [line.strip() for line in cleaned.split('\n') if line.strip()]
+        summary = lines[0] if lines else cleaned[:30].strip()
+        return summary[:30] if len(summary) > 5 else "Thread"
 
     async def run_cronjob(self, prompt_file, channel_id, mention_user_id=None, silent=False, probability=None):
         if probability is not None:
@@ -867,21 +831,18 @@ class GeminiClawBot(commands.Bot):
                 final_response = await self._stream_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds)
 
             db.update_message_status(msg_id_db, 'completed', final_response)
-            
-            if isinstance(channel, discord.Thread) and db.get_message_count(channel.id) >= 2:
-                session_id = db.get_thread_session(channel.id)
-                if session_id:
-                    summary = await self.get_gemini_session_summary(session_id)
-                    if summary and summary != channel.name:
-                        try:
-                            await channel.edit(name=summary)
-                            print(f"Updated thread name to: {summary}")
-                        except Exception as e:
-                            print(f"Failed to update thread name: {e}")
 
-            
             # Send attachments
             await self._handle_outbound_attachments(final_response, channel, self.cwd)
+
+            if isinstance(channel, discord.Thread) and db.get_message_count(channel.id) <= 4:
+                summary = await self.generate_thread_summary(final_response)
+                if summary and summary != channel.name:
+                    try:
+                        await channel.edit(name=summary)
+                        print(f"Updated thread name to: {summary}")
+                    except Exception as e:
+                        print(f"Failed to update thread name: {e}")
 
             db.update_message_status(msg_id_db, 'delivered')
 

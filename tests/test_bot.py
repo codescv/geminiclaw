@@ -616,38 +616,6 @@ async def test_on_message_always_reply_with_mentions(bot_instance):
         # Should NOT reply because it has mentions
         assert message.add_reaction.call_count == 0
 
-@pytest.mark.asyncio
-async def test_get_gemini_session_summary(bot_instance):
-    from unittest.mock import patch, AsyncMock
-    
-    with patch('asyncio.create_subprocess_exec') as mock_exec:
-        process = AsyncMock()
-        process.communicate.return_value = (
-            b"Available sessions for this project (1):\n  1. my awesome summary (2 min ago) [sess-1234]\n", 
-            b""
-        )
-        process.returncode = 0
-        mock_exec.return_value = process
-        
-        summary = await bot_instance.get_gemini_session_summary("sess-1234")
-        assert summary == "my awesome summary"
-
-@pytest.mark.asyncio
-async def test_get_gemini_session_summary_not_found(bot_instance):
-    from unittest.mock import patch, AsyncMock
-    
-    with patch('asyncio.create_subprocess_exec') as mock_exec:
-        process = AsyncMock()
-        process.communicate.return_value = (
-            b"Available sessions for this project (1):\n  1. my awesome summary (2 min ago) [sess-1234]\n", 
-            b""
-        )
-        process.returncode = 0
-        mock_exec.return_value = process
-        
-        summary = await bot_instance.get_gemini_session_summary("sess-5678")
-        assert summary is None
-
 
 @pytest.mark.asyncio
 async def test_on_message_restart(bot_instance):
@@ -665,4 +633,24 @@ async def test_on_message_restart(bot_instance):
         
         message.add_reaction.assert_called_once_with("🔄")
         mock_popen.assert_called_once_with(["geminiclaw", "service", "restart", "--service-name", "custom-service"], start_new_session=True)
+
+@pytest.mark.asyncio
+async def test_generate_thread_summary(bot_instance):
+    bot_instance.user.name = "GeminiClaw"
+    
+    # Test case 1: Single line with mention
+    summary = await bot_instance.generate_thread_summary("@GeminiClaw Hello World")
+    assert summary == "Hello World"
+    
+    # Test case 2: Multiple lines, first non-empty
+    summary = await bot_instance.generate_thread_summary("\n\n  \nHello First Line\nSecond Line")
+    assert summary == "Hello First Line"
+    
+    # Test case 3: All lines empty
+    summary = await bot_instance.generate_thread_summary("\n\n  \n")
+    assert summary == "Thread"
+    
+    # Test case 4: Mention and newlines
+    summary = await bot_instance.generate_thread_summary("@GeminiClaw \n\nHello after mention\nLine 2")
+    assert summary == "Hello after mention"
 
