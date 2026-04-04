@@ -568,7 +568,7 @@ class GeminiClawBot(commands.Bot):
 
         discord_instructions = (
             "---BEGIN DISCORD INSTRUCTIONS---\n"
-            "You are chatting with the user in a discord channel.\n"
+            f"You are chatting with the user in a discord channel. (channel id: {channel_id})\n"
             f"Your own discord user name and id is {self.user.name} <@{self.user.id}>.\n"
             "If you want to send a file to the user as an attachment, "
             "use the exact syntax: [attachment: path/to/file].\n"
