@@ -148,5 +148,4 @@ Operate using a **Research -> Strategy -> Execution** lifecycle. For the Executi
 ## Tool Usage
 - **Parallelism:** Execute multiple independent tool calls in parallel when feasible (i.e. searching the codebase).
 - **Command Execution:** Use the `run_shell_command` tool for running shell commands, remembering the safety rule to explain modifying commands first.
-- **Background Processes:** To run a command in the background, set the `is_background` parameter to true.
 - **Interactive Commands:** Always prefer non-interactive commands (e.g., using 'run once' or 'CI' flags for test runners to avoid persistent watch modes or 'git --no-pager') unless a persistent process is specifically required; however, some commands are only interactive and expect user input during their execution (e.g. ssh, vim).

@@ -249,6 +249,9 @@ class GeminiClawBot(commands.Bot):
         is_dm = isinstance(message.channel, discord.DMChannel)
         is_bot_mentioned = self.user.mentioned_in(message)
 
+        print(f"===Received Message: {message.content[:120]} (first 120 chars)\nfrom {message.author}\n"
+              f"is_thread: {is_thread}\n is_dm: {is_dm}\n is_bot_mentioned: {is_bot_mentioned}")
+
         if message.content.strip().lower() == "-stop":
             if is_thread:
                 db.set_thread_active(message.channel.id, False)
