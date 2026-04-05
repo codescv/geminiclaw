@@ -676,3 +676,55 @@ async def test_run_cronjob(bot_instance):
         if os.path.exists(prompt_file):
             os.remove(prompt_file)
 
+@pytest.mark.asyncio
+async def test_process_pending_messages_cronjob_outbound_attachments(bot_instance):
+    from unittest.mock import patch, AsyncMock
+    
+    with patch('geminiclaw.bot.db') as mock_db:
+        mock_db.get_next_processable_message.side_effect = [{
+            'id': 1,
+            'channel_id': '123456',
+            'prompt': 'Hello',
+            'author_id': '789',
+            'status': 'pending',
+            'message_id': '0'
+        }, None]
+        mock_db.get_thread_session.return_value = None
+        mock_db.get_message_count.return_value = 1
+        
+        from unittest.mock import MagicMock
+        channel = AsyncMock(spec=discord.TextChannel)
+        channel.typing = MagicMock(return_value=AsyncMock())
+        
+        thread = AsyncMock(spec=discord.Thread)
+        channel.create_thread.return_value = thread
+        
+        bot_instance.get_channel = MagicMock(return_value=channel)
+
+        with patch('asyncio.create_subprocess_exec') as mock_exec:
+            process = AsyncMock()
+            process.communicate.return_value = (b'{"response": "Here is the file [attachment: output.txt]"}', b'')
+            mock_exec.return_value = process
+            
+            with patch('os.path.isfile', return_value=True), patch('discord.File'):
+                await bot_instance.process_pending_messages()
+                
+                import time
+                start = time.time()
+                while bot_instance.running_processes and time.time() - start < 5:
+                    await asyncio.sleep(0.1)
+                
+            assert thread.send.call_count > 0
+            file_sent = False
+            for call in thread.send.call_args_list:
+                kwargs = call[1]
+                if 'files' in kwargs:
+                    file_sent = True
+                    break
+            assert file_sent
+            
+            for call in channel.send.call_args_list:
+                kwargs = call[1]
+                assert 'files' not in kwargs or not kwargs['files']
+
+

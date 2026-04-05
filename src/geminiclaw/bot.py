@@ -662,7 +662,7 @@ class GeminiClawBot(commands.Bot):
             final_response = f"Error: Gemini command timed out after {timeout_seconds} seconds."
 
         if NO_REPLY in final_response:
-            return NO_REPLY
+            return NO_REPLY, channel
         
         if is_cronjob and final_response:
             try:
@@ -713,7 +713,7 @@ class GeminiClawBot(commands.Bot):
                 if chunk.strip():
                     await channel.send(chunk)
 
-        return final_response
+        return final_response, channel
 
     async def _stream_gemini_output(self, process, channel, author_id, msg_id_db, timeout_seconds):
         """Read output stream from Gemini process, send chunks to Discord, and return final response."""
@@ -867,7 +867,7 @@ class GeminiClawBot(commands.Bot):
             timeout_seconds = self.gemini_config.get('timeout', 600)
             
             if self._is_stream_off(row['channel_id'], channel) or is_cronjob:
-                final_response = await self._get_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds, is_cronjob=is_cronjob, prompt=prompt, mention_user_id=mention_user_id)
+                final_response, channel = await self._get_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds, is_cronjob=is_cronjob, prompt=prompt, mention_user_id=mention_user_id)
             else:
                 final_response = await self._stream_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds)
 
