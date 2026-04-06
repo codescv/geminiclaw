@@ -664,17 +664,6 @@ class GeminiClawBot(commands.Bot):
         if NO_REPLY in final_response:
             return NO_REPLY, channel
         
-        if is_cronjob and final_response:
-            try:
-                thread_name = await self.generate_thread_summary(prompt if prompt else "Cronjob")
-                thread = await channel.create_thread(name=thread_name)
-                db.set_thread_active(thread.id, True)
-                print(f"Created thread {thread_name} ({thread.id}) for cronjob")
-                await thread.send(f"🤖 *Executing cronjob...* <@{mention_user_id}>" if mention_user_id else "🤖 *Executing cronjob...*")
-                channel = thread
-            except Exception as e:
-                print(f"Failed to create thread for cronjob: {e}")
-
         # Channel routing override
         match = re.search(r'\[to_channel:\s*(\d+)\]', final_response)
         if match:
@@ -689,6 +678,21 @@ class GeminiClawBot(commands.Bot):
                 print(f"Routing response to channel {target_id}")
                 channel = target_channel
                 final_response = final_response.replace(match.group(0), "").strip()
+
+        if is_cronjob and final_response:
+            if not isinstance(channel, discord.Thread) and not isinstance(channel, discord.DMChannel):
+                try:
+                    thread_name = await self.generate_thread_summary(prompt if prompt else "Cronjob")
+                    thread = await channel.create_thread(name=thread_name, type=discord.ChannelType.public_thread)
+                    db.set_thread_active(thread.id, True)
+                    print(f"Created thread {thread_name} ({thread.id}) for cronjob")
+                    await thread.send(f"<@{mention_user_id}>" if mention_user_id else "Executing cronjob...*")
+                    channel = thread
+                except Exception as e:
+                    print(f"Failed to create thread for cronjob: {e}")
+            else:
+                print(f"Cronjob output routed to existing thread or DM {channel.id}, sending execution message.")
+                await channel.send(f"<@{mention_user_id}>" if mention_user_id else "Executing cronjob...*")
 
         if final_response:
             clean_text = re.sub(r'\[attachment:\s*.*?\]', '', final_response)
