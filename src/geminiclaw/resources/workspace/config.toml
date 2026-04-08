@@ -44,16 +44,24 @@ cli_home = "."
 # Defaults to "attachments" inside the workspace.
 # attachments_dir = "attachments"
 
-# [prompt]
+[prompt]
 # The paths to the markdown files used for prompt customization (relative to workspace or absolute)
 # add your own user prompts here
 user = [
   "instructions/Rules.md",
-  "instructions/User.md"
+  "instructions/User.md",
+  "memory/Learnings.md"
 ]
 
+# The heartbeat is mainly for continuation of long running tasks
 [[cronjob]]
 schedule = "*/30 * * * *"
 prompt = "cronjobs/Heartbeat.md"
-channel_id = "channel id"  # default notification channel for heartbeat messages
-silent = false
+# default notification channel for heartbeat messages, set None to disable heartbeat
+channel_id = "channel id"
+
+# This consolidates memory for project progresses and errors.
+[[cronjob]]
+schedule = "0 3 * * *"
+prompt = "cronjobs/Memory Updates.md"
+silent = true

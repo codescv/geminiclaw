@@ -3,22 +3,27 @@
 ;; allow everything by default
 (allow default)
 (deny file-read*
-    (subpath "~/Library/LaunchAgents")
+    ;; block files that can reveal API keys
+    (subpath "${HOME}/Library/LaunchAgents")
+    (subpath "${HOME}/.zsh_history")
+    (subpath "${HOME}/.bash_history")
 )
 
 ;; deny all writes EXCEPT under specific paths
 (deny file-write*)
 (allow file-write*
+    ;; Allow current dir
     (subpath (param "TARGET_DIR"))
+    ;; Allow temp dirs
     (subpath (param "TMP_DIR"))
     (subpath (param "CACHE_DIR"))
-    (subpath "~/.npm")
-    (subpath "~/.cache")
-    (subpath "~/.gitconfig")
-
+    (subpath "${HOME}/.npm")
+    (subpath "${HOME}/.cache")
+    (subpath "${HOME}/.gitconfig")
     (subpath "/tmp")
     (subpath "/private/tmp")
     (subpath "/private/var/folders")
+
     (literal "/dev/stdout")
     (literal "/dev/stderr")
     (literal "/dev/null")

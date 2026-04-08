@@ -157,9 +157,11 @@ class GeminiClawBot(commands.Bot):
                         CronTrigger.from_crontab(schedule),
                         args=[prompt_file, channel_id, mention_user_id, silent, probability]
                     )
-                    print(f"Added cronjob: {schedule} -> {prompt_file} in {channel_id}")
+                    print(f"Added cronjob: {schedule} -> {prompt_file}, report channel: {channel_id}")
                 except Exception as e:
                     print(f"Failed to add cronjob {job_config}: {e}")
+            else:
+                print(f"Warning: Cronjob skipped {job_config} (missing channel_id, schedule, or prompt file)")
         self.scheduler.start()
 
     async def generate_thread_summary(self, prompt):
@@ -608,6 +610,8 @@ class GeminiClawBot(commands.Bot):
         if self.gemini_config.get('cli_home') is not None:
             env['GEMINI_CLI_HOME'] = str(self.gemini_config['cli_home'])
         env['GEMINI_SYSTEM_MD'] = system_prompt_path
+        if self.gemini_config.get('sandbox') == True:
+            env['SEATBELT_PROFILE'] = 'geminiclaw'
 
         process = await asyncio.create_subprocess_exec(
             *args,

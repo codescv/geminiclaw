@@ -1,0 +1,1 @@
+This is a directory for projects created by the agent.

@@ -37,6 +37,17 @@ def init():
                     else:
                         shutil.copy2(src_file, dst_file)
                         print(f"Copied {dst_file}")
+        
+        sb_file = os.path.join(".gemini", "sandbox-macos-geminiclaw.sb")
+        if os.path.exists(sb_file):
+            content = open(sb_file).read()
+            home_dir = os.path.expanduser("~")
+            new_content = content.replace("${HOME}", home_dir)
+            if new_content != content:
+                with open(sb_file, "w") as f:
+                    f.write(new_content)
+                print(f"Updated {sb_file} with current user home directory.")
+
         print("Initialization complete. Please do the following steps:")
         print("- Ensure you have set all variables in `config.toml.`")
         print("- Run `./bootstrap.sh` to initialize the Gemini workspace.")
