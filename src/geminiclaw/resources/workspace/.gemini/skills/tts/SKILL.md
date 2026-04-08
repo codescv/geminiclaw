@@ -3,13 +3,14 @@ name: tts
 description: "Generate high-fidelity speech audio using text to speech with voice cloning and subtitles."
 ---
 
-# Installation
-If not installed, install it first with:
-`which tts || uv tool install --default-index https://pypi.org/simple git+https://github.com/codescv/tts`.
+# Prerequisites
+Make sure `tts` command is installed first with:
+`which tts || uv tool install --default-index https://pypi.org/simple git+https://github.com/codescv/aigc_toolkit`.
 
 # Parameters
-- `--text`: The target text to synthesize. For best quality, you need to split the text into chunks using newlines (`\n`), where each
-  chunk is 10-30 words (for languages like English) or characters (for languages like Chinese and Japanese).
+- `--text`: The target text to synthesize. 
+  - For best quality, you need to split the text into chunks using newlines (`\n`), where each chunk is 20-30 words (for languages like English) or characters (for languages like Chinese and Japanese). Combine sentences that are too short and split sentences that are too long. 
+  - Make sure to strip non-spoken text. e.g. "マリオの映画(えいが)を見(み)た" -> "マリオの映画を見た"
 - `--output`: Full path to the output `.wav` file.
 - `--ref_audio` (Optional): Path to a 5-30 second clear reference audio file. Required for voice cloning.
 - `--ref_text` (Optional): The exact text spoken in the reference audio. Required for voice cloning.

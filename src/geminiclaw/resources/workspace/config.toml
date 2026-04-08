@@ -50,6 +50,7 @@ cli_home = "."
 user = [
   "instructions/Rules.md",
   "instructions/User.md",
+  "instructions/Role Playing.md",  # If you don't need role playing, just remove this line
   "memory/Learnings.md"
 ]
 
