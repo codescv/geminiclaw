@@ -1,3 +1,5 @@
+> [English](DESIGN.md) | [中文](DESIGN_zh.md)
+
 # Gemini Claw - Agent based on Gemini CLI
 
 Gemini CLI is already a full-featured agent - it can do almost anything.

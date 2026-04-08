@@ -5,6 +5,7 @@ build/
 dist/
 wheels/
 *.egg-info
+.pytest_cache
 
 # macOS
 .DS_Store
@@ -23,3 +24,5 @@ wheels/
 
 # store private data (reserved for testing etc)
 private/
+
+attachments/

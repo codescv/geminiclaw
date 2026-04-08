@@ -1,3 +1,5 @@
+> [English](role_playing.md) | [中文](role_playing_zh.md)
+
 # Role Playing with Gemini Claw
 
 Gemini Claw supports robust role-playing capabilities by leveraging the injected system instructions and character files in the Gemini workspace. This guide explains how role playing is constructed and how you can define your own characters.

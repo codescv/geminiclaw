@@ -1,3 +1,5 @@
+> [English](memory_management.md) | [中文](memory_management_zh.md)
+
 # Memory Management in Gemini Claw
 
 Gemini Claw uses a transparent, file-backed memory system stored directly in your local workspace. This ensures that all task progress, user preferences, learnings, and error logs persist reliably across bot restarts and long-running conversations.

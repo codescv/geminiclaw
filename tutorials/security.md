@@ -1,3 +1,5 @@
+> [English](security.md) | [中文](security_zh.md)
+
 # Security Configuration in Gemini Claw
 
 Gemini Claw inherits the robust security architecture of the Gemini CLI, allowing you to safely execute agent commands within your environment. All security defaults are managed under the `[gemini]` section of your `config.toml` file.

@@ -1,3 +1,5 @@
+> [English](background_tasks.md) | [中文](background_tasks_zh.md)
+
 # Long-Running Background Tasks in Gemini Claw
 
 Gemini Claw supports running and tracking tasks that take a long time to complete (such as training models, compiling software, or rendering complex videos) without blocking the bot's response loop.
