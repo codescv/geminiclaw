@@ -1,5 +1,6 @@
 [discord]
-# The Discord bot token, can also be set from env variable DISCORD_TOKEN
+# The Discord bot token.
+# For prod use, it's recommended to use env variable DISCORD_TOKEN
 token = "YOUR_DISCORD_BOT_TOKEN"
 
 # Optional: List of users to always reply to without explicit mention (usernames or user IDs)
@@ -7,6 +8,7 @@ token = "YOUR_DISCORD_BOT_TOKEN"
 
 [gemini]
 # Optional: API keys and cloud settings. The Gemini CLI will also respect standard environment variables.
+# It's recommended to set in env variables instead of here for better safety.
 # api_key = "YOUR_GOOGLE_API_KEY"
 # project = "YOUR_GOOGLE_CLOUD_PROJECT"
 # location = "YOUR_GOOGLE_CLOUD_LOCATION"
@@ -14,42 +16,44 @@ token = "YOUR_DISCORD_BOT_TOKEN"
 # Optional: The path to the Gemini CLI executable. If not provided, it will be searched in PATH.
 # executable_path = "/usr/local/bin/gemini"
 
-# Optional: Maximum time in seconds to wait for Gemini to respond (default: 600)
-# timeout = 600
+# Optional: Maximum time in seconds to wait for Gemini CLI to respond
+timeout = 3600
 
 # The path to the workspace directory to run the Gemini agent in
-workspace = "workspace"
+# workspace = "."
 
 # Optional: A list of additional directories to include in the workspace
 # This is useful for including directories that are not in the workspace, 
 # but you want the agent to have access to.
 # include_directories = ["/path/to/your/notes", "/path/to/your/projects"]
 
+# Security settings
+# My recommendation is to set sandbox = true for better safety and yolo = true for convenience
+# If for some reason you can't use sandbox, then set yolo = false and use policies.
 # Whether to run the agent in a sandboxed environment (true/false)
-sandbox = false
- 
+sandbox = true
 # Whether to always run Gemini with YOLO mode enabled (-y) (true/false)
-# yolo = false
+yolo = true
+# Optional: A list of policy configuration files to forcefully inject into every Gemini CLI execution
+# policy = [".gemini/policy/tools.toml"]
 
 # Optional: The home directory for the Gemini CLI configuration and session data
-# cli_home = "/path/to/.config/gemini"
+cli_home = "."
  
 # Optional: The directory to save attachments to (relative to workspace or absolute).
 # Defaults to "attachments" inside the workspace.
 # attachments_dir = "attachments"
 
-# Optional: A list of policy configuration files to forcefully inject into every Gemini CLI execution
-# policy = ["my_policy1.yaml", "my_policy2.yaml"]
-
 # [prompt]
 # The paths to the markdown files used for prompt customization (relative to workspace or absolute)
 # add your own user prompts here
-# user = ["user.md"]
+user = [
+  "instructions/Rules.md",
+  "instructions/User.md"
+]
 
-# [[cronjob]]
-# schedule = "10 13 * * *"
-# prompt = "cronjobs/test.md"
-# channel_id = "channel id"
-# mention_user_id = "your user id"
-# silent = false
-# probability = 1.0
+[[cronjob]]
+schedule = "*/30 * * * *"
+prompt = "cronjobs/Heartbeat.md"
+channel_id = "channel id"  # default notification channel for heartbeat messages
+silent = false

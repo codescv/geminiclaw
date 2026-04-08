@@ -70,7 +70,7 @@ Once installed, run the following command to initialize the setup:
 ```bash
 geminiclaw init
 ```
-This will create a `config.toml` file in the current directory and initialize the SQLite database. Please edit the `config.toml` file to add your `DISCORD_TOKEN` and Gemini configuration.
+This will copy all files from the bundled workspace to the current directory and initialize the SQLite database. Please edit the `config.toml` file to add your `DISCORD_TOKEN` and Gemini configuration.
 
 *Note: Set `HTTP_PROXY` and `HTTPS_PROXY` in your shell environment if you need one for connecting Gemini CLI and Discord API server.*
 
@@ -103,7 +103,7 @@ To initialize the setup, run this command from the root of the `geminiclaw` dire
 ```bash
 uv run geminiclaw init
 ```
-This will create a `config.toml` file from the example and initialize the SQLite database. Please edit the `config.toml` file to add your `DISCORD_TOKEN` and Gemini configuration.
+This will copy all files from the bundled workspace to the current directory and initialize the SQLite database. Please edit the `config.toml` file to add your `DISCORD_TOKEN` and Gemini configuration.
 
 *Note: Set `HTTP_PROXY` and `HTTPS_PROXY` in your shell environment if you need one for connecting Gemini CLI and Discord API server.*
 

@@ -38,7 +38,7 @@ Inbound Channels (e.g. Discord) -> SQLite Database -> Polling loop (Python async
 
 **4. Setup and Configuration Commands**
 - To guide the user during the initial bootstrap, we provide a CLI interface:
-  - `uv run geminiclaw init`: Run when the user first clones the repository. It creates a `config.toml` file from the example, and initializes the SQLite database schema.
+  - `uv run geminiclaw init`: Run when the user first clones the repository. It copies all resources from the bundled workspace to the current directory (skipping existing files and printing warnings if contents differ), and initializes the SQLite database schema.
   - The CLI handles both starting the bot (`uv run geminiclaw start`) and managing the background service for macOS and Linux (`uv run geminiclaw service`).
 - These commands act as entry points that spawn the respective Python utility functions in `src/geminiclaw/cli.py` to keep the heavy lifting in Python.
  

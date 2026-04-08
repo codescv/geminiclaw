@@ -1,0 +1,42 @@
+[[rule]]
+toolName = ["write_file", "replace"]
+decision = "allow"
+priority = 200
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = [
+  # common bash commands
+  "ls", "mv", "find", "echo", "date", "cat", "grep", "mkdir", "which", "cp", "chmod", "tar", "unzip",
+  "touch", "ln", "sort", "head", "tail", "ps", "kill", "pkill", "pgrep", "pwd", "env", "wc", "stat",
+  "nohup", "sed", "awk"
+  # common utilities
+  "git", "curl", "uv", "npm", "nodejs", "npx", "ffmpeg", "ffprobe", "cmake",
+  "geminiclaw"
+]
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = ["python"]
+decision = "deny"
+priority = 200
+
+[[rule]]
+toolName = "activate_skill"
+decision = "allow"
+priority = 200
+
+# deny gemini's built-in `save_memory` since we have our own memory management
+[[rule]]
+toolName = "save_memory"
+decision = "deny"
+priority = 999
+modes = ["yolo"]
+
+[[rule]]
+toolName = "save_memory"
+decision = "deny"
+priority = 999
+modes = ["default"]

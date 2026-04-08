@@ -62,6 +62,8 @@ def install_macos(project_dir, geminiclaw_path, env_vars, service_name):
     </dict>
     <key>RunAtLoad</key>
     <true/>
+    <key>KeepAlive</key>
+    <true/>
 </dict>
 </plist>
 """

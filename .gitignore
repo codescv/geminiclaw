@@ -21,8 +21,5 @@ wheels/
 # Log files
 *.log
 
-# Config file
-config.toml
-
-# store private data (workspaces for testing etc)
+# store private data (reserved for testing etc)
 private/

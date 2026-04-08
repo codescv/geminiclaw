@@ -14,19 +14,36 @@ app = typer.Typer(help="Gemini Claw CLI")
 def init():
     # Initialize DB
     init_db()
-    # Check config.toml
-    if not os.path.exists("config.toml"):
-        try:
-            import importlib.resources
-            example_content = importlib.resources.files("geminiclaw.resources").joinpath("config.example.toml").read_text()
-            with open("config.toml", "w") as f:
-                f.write(example_content)
-            print("Created config.toml from bundled example. Please configure it.")
-        except Exception as e:
-            print(f"Warning: config.toml not found and bundled config.example.toml is missing: {e}")
-        print("Initialization complete. Please ensure you have set all variables in config.toml.")
-    else:
-        print("config.toml already exists.")
+
+    # Initialize workspace files
+    try:
+        import importlib.resources
+        import filecmp
+        from contextlib import ExitStack
+
+        resource_path = importlib.resources.files("geminiclaw.resources").joinpath("workspace")
+        with ExitStack() as stack:
+            workspace_dir = stack.enter_context(importlib.resources.as_file(resource_path))
+            for root, dirs, files in os.walk(workspace_dir):
+                rel_path = os.path.relpath(root, workspace_dir)
+                target_dir = os.path.join(".", rel_path) if rel_path != "." else "."
+                os.makedirs(target_dir, exist_ok=True)
+                for file in files:
+                    src_file = os.path.join(root, file)
+                    dst_file = os.path.join(target_dir, file)
+                    if os.path.exists(dst_file):
+                        if not filecmp.cmp(src_file, dst_file, shallow=False):
+                            print(f"Warning: {dst_file} differs from the bundled workspace version and was skipped.")
+                    else:
+                        shutil.copy2(src_file, dst_file)
+                        print(f"Copied {dst_file}")
+        print("Initialization complete. Please do the following steps:")
+        print("- Ensure you have set all variables in `config.toml.`")
+        print("- Run `./bootstrap.sh` to initialize the Gemini workspace.")
+        print("- Edit `instructions/User.md` to let the agent know more about you.")
+        print("- Run geminiclaw service install to install this as a background service.")
+    except Exception as e:
+        print(f"Warning: failed to copy workspace resources: {e}")
 
 
 @app.command(help="Start the bot directly")
