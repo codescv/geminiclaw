@@ -3,14 +3,14 @@
 Gemini CLI is already a full-featured agent - it can do almost anything.
 The only major piece missing is communication channels that allow it to be controlled by the user remotely (e.g., via Discord).
 
-## Architecture
+# Architecture
 
 Message flow:
 ```text
 Inbound Channels (e.g. Discord) -> SQLite Database -> Polling loop (Python async task) -> Gemini CLI Subprocess -> Outbound Response
 ```
 
-### Components
+# Components
 
 **1. Channels (Discord Bot)**
 - **Inbound:** Listens for mentions, whitelisted users (if not in a thread and no explicit mentions), or specific commands in a Discord channel using `discord.py`. Parses the user's message and inserts it into an SQLite database with a status of `pending`.
@@ -53,7 +53,29 @@ Inbound Channels (e.g. Discord) -> SQLite Database -> Polling loop (Python async
 - **Flow**: Reads a prompt file and inserts a **pending message** into the SQLite database with the target channel's ID and sets the `author_id` to the bot's own ID. Thread creation is deferred until a successful response is received (avoiding empty threads on `NO_REPLY`). Cronjobs always run with streaming disabled.
 - **Processing**: The standard async polling loop automatically picks this up, executes it with the Gemini agent, and delivers the response into the thread just like a normal user prompt. For silent messages, execution happens in the background without any Discord interaction. This decouples scheduling from execution logic.
  
-## Process Management
+# Process Management
 - **Single Process:** The Discord Bot (`discord.py` client loop) and the database polling mechanism will run within the same Python process using `asyncio` tasks. This avoids the overhead and complexity of managing multiple background services, while still keeping the architecture decoupled via the SQLite layer.
 - **Process Killing:** The bot tracks running `gemini` subprocesses in a dictionary. When a `-kill` command is received in a channel, it terminates the process for that specific channel (or thread) manually.
 - **Process Restarting:** When a `-restart` command is received, the bot spawns a background shell command `geminiclaw service restart` to restart the bot service itself. Use with caution as it will disconnect the bot temporarily.
+- **Killing Active Commands**: If a bot is running a long-running prompt and you want to terminate it, send `-kill` in the thread. This will kill the current running `gemini` CLI process for that thread.
+
+# Multi-Bot Chat
+
+Gemini Claw natively supports multi-bot interactions! You can run multiple instances of the bot (with different configurations or system prompts) and have them converse with each other or with users in the same thread.
+
+- **Seamless Thread Joining**: Mention multiple bots in a single message (e.g., `@Bot1 @Bot2 let's discuss Python`). They will automatically coordinate and join the same thread without creating duplicates.
+- **Smart Streaming Handling**: Bots append an `(incomplete)` flag to their messages while generating tokens. Other bots will wait until a message is fully complete before responding, preventing them from interrupting each other mid-sentence.
+- **Halting Conversations**: If the bots are talking to each other endlessly, you can send the `-stop` command in the thread. This will mark the thread as inactive for all listening bots, stopping the auto-reply loop. 
+- **Resuming Conversations**: If you want the bots to start listening to the thread again, simply type `-continue`. The bots will reactivate and resume participating.
+
+
+ 
+# Attachments Support
+ 
+Gemini Claw supports two-way attachment handling:
+- **Inbound:** Downloads Discord message attachments (files, images, etc.) and makes them available to the Gemini CLI agent in its workspace.
+- **Outbound:** The agent can send files from its workspace back to you by including `[attachment: path/to/file]` in its response. The bot automatically uploads these files to Discord.
+
+# Channel Routing
+
+The agent can route its response to a specific Discord channel instead of the current one by including the syntax `[to_channel: <channel_id>]` in its response. The bot will extract the channel ID, fetch that channel, and send the response there. The tag will be removed from the final message content.

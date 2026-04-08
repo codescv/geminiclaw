@@ -1,9 +1,8 @@
 # Gemini Claw
 
-[English](README.md) | [中文](README_zh.md)
 Gemini Claw is a Discord bot powered by the [Gemini CLI](https://github.com/google/gemini-cli). It acts as a bridge, allowing you to interact with the Gemini CLI agent directly from your Discord server.
 
-## Why Gemini Claw?
+# Why Gemini Claw?
 
 The Gemini CLI is already an incredibly capable, full-featured AI agent. However, it is primarily designed for local terminal use and lacks remote communication channels. Gemini Claw solves this by providing a seamless bridge to Discord. 
 
@@ -12,7 +11,20 @@ Instead of building a new agent from scratch, Gemini Claw leverages the power of
 - **Simplicity:** A small, easy-to-understand Python codebase that acts merely as a decoupling layer.
 - **Extensibility:** Adds new capabilities through native Gemini CLI extensions rather than reinventing the wheel.
 
-## Screenshots
+# Features
+
+- **Threaded Interactions**: Supports threaded interactions with Gemini CLI agents.
+- **Memory Management**: Supports memory management for tracking progresses, learning about user preferences etc.
+- **Security**: Well integrated with Gemini CLI's sandbox and security policy support, preventing leaks of secrets such as API keys.
+- **Channel topic as system prompt**: Supports channel topic injected to system prompt to provide channel based customizations.
+- **Cronjobs**: Supports cronjobs that read a prompt file, execute it using Gemini CLI, and send the output to a specific Discord channel in a new thread.
+- **Role Playing**: Supports **multiple** role playing for different channels.
+- **Long Running Tasks**: Supports long running tasks that can be run in background, and heartbeat to check status and report.
+- **Multi-Bot Chat**: Supports multiple Gemini CLI agents chatting with each other in a Discord channel.
+- **Attachments**: Supports two way videos, images, voice messages and file attachments.
+
+
+# Screenshots
 
 <div align="center">
   <img src="images/ss1.PNG" alt="Screenshot 1" width="30%">
@@ -20,29 +32,22 @@ Instead of building a new agent from scratch, Gemini Claw leverages the power of
   <img src="images/ss3.PNG" alt="Screenshot 3" width="30%">
 </div>
 
-### Threaded Interations
+## Threaded Interations
 <img src="images/threads.png">
 
-### Multi bots chat
+## Multi bots chat
 <img src="images/debate_1.png">
 <img src="images/debate_2.png">
 
-## Architecture
 
-Gemini Claw uses a robust SQLite-backed architecture to decouple the Discord bot from the Gemini CLI execution. Messages are processed concurrently across different channels/threads, but serially within the same thread to ensure consistency. This ensures that no messages are lost, even if a complex command takes a long time to run.
+# Prerequisites
 
-```text
-Inbound Channels (Discord) -> SQLite Database -> Polling loop (Python async task) -> Gemini CLI Subprocess -> Outbound Response
-```
-
-## Prerequisites
-
-### Dependencies
+## Dependencies
 - **Python:** Ensure you have [Python](https://www.python.org/downloads/) installed.
 - **uv:** This project uses `uv` for dependency management. Install it via `curl -LsSf https://astral.sh/uv/install.sh | sh`.
 - **Gemini CLI:** Ensure you have the Gemini CLI installed and authenticated.
 
-### Discord Bot Configuration
+## Discord Bot Configuration
 Before running the setup, you need to create a bot on Discord:
 1. Go to the [Discord Developer Portal](https://discord.com/developers/applications).
 2. Click **New Application** and give it a name.
@@ -55,9 +60,9 @@ Before running the setup, you need to create a bot on Discord:
 9. Under **Bot Permissions**, check **Send Messages**, **Read Message History**, and **View Channels**.
 10. At the bottom of the page, **Copy the generated URL**.
 11. Paste that URL into a new browser tab, select your server, and click **Authorize** to invite the bot.
-12. To get your `DISCORD_GUILD_ID` (Server ID) for setup, open Discord, go to **User Settings** -> **Advanced**, and turn **Developer Mode** ON. Then, right-click your server icon in the left sidebar and click **Copy Server ID**.
 
-## Installation
+
+# Installation
 
 You can install and run `geminiclaw` directly using `uv tool` without cloning the source code:
 
@@ -65,93 +70,36 @@ You can install and run `geminiclaw` directly using `uv tool` without cloning th
 uv tool install git+https://github.com/codescv/geminiclaw.git
 ```
 
-### Initialize the Bot
+# Initialize the Bot
 Once installed, run the following command to initialize the setup:
 ```bash
 geminiclaw init
 ```
-This will copy all files from the bundled workspace to the current directory and initialize the SQLite database. Please edit the `config.toml` file to add your `DISCORD_TOKEN` and Gemini configuration.
+This will copy all files from the bundled workspace to the current directory and initialize the SQLite database, and then print instructions for recommended configurations.
 
 *Note: Set `HTTP_PROXY` and `HTTPS_PROXY` in your shell environment if you need one for connecting Gemini CLI and Discord API server.*
 
-
-### Start the bot Manually (Recommended for inital setup)
-Start the bot manually to verify the configuration and setup.
-```bash
-geminiclaw start
-```
-Now you should be able to text the bot in your server.
-
-### Managing the Bot Service
+# Running as a Service
 
 The `geminiclaw` CLI provides commands to manage the background service for macOS / Linux.
 
 - **Install the Service:** `geminiclaw service install` (Installs the background service)
 - **Start the Service:** `geminiclaw service start` (Starts the background service)
 - **Stop the Service:** `geminiclaw service stop` (Stops the background service)
+- **Restart the Service:** `geminiclaw service restart` (Restarts the background service)
 - **Check Status:** `geminiclaw service status` (Checks the status of the service)
 
-
-## Development
-
-If you are developing or running from the source code, you can use `uv run` within the cloned repository.
-
-### Initialize the Bot (Source)
-The `geminiclaw` package comes with a built-in CLI to manage configuration and the database.
-
-To initialize the setup, run this command from the root of the `geminiclaw` directory:
-```bash
-uv run geminiclaw init
-```
-This will copy all files from the bundled workspace to the current directory and initialize the SQLite database. Please edit the `config.toml` file to add your `DISCORD_TOKEN` and Gemini configuration.
-
-*Note: Set `HTTP_PROXY` and `HTTPS_PROXY` in your shell environment if you need one for connecting Gemini CLI and Discord API server.*
-
-### Manual Start
-
-If you want to see real-time logs and debug any issues (like connection errors or intent problems), you can manually run the bot directly in the foreground:
-```bash
-uv run geminiclaw start
-```
-This is the recommended way to troubleshoot your initial setup.
-
-## Using the Bot
+# Using the Bot
 Once started, simply mention the bot in your Discord server followed by your prompt, or send it a Direct Message.
 
 ```text
 @GeminiClaw write a python script to reverse a string
 ```
 
-## Multi-Bot Chat
-
-Gemini Claw natively supports multi-bot interactions! You can run multiple instances of the bot (with different configurations or system prompts) and have them converse with each other or with users in the same thread.
-
-- **Seamless Thread Joining**: Mention multiple bots in a single message (e.g., `@Bot1 @Bot2 let's discuss Python`). They will automatically coordinate and join the same thread without creating duplicates.
-- **Smart Streaming Handling**: Bots append an `(incomplete)` flag to their messages while generating tokens. Other bots will wait until a message is fully complete before responding, preventing them from interrupting each other mid-sentence.
-- **Halting Conversations**: If the bots are talking to each other endlessly, you can send the `-stop` command in the thread. This will mark the thread as inactive for all listening bots, stopping the auto-reply loop. 
-- **Resuming Conversations**: If you want the bots to start listening to the thread again, simply type `-continue`. The bots will reactivate and resume participating.
-- **Killing Active Commands**: If a bot is running a long-running prompt and you want to terminate it, send `-kill` in the thread. This will kill the current running `gemini` CLI process for that thread.
-- **Restarting the Bot Service**: Send `-restart` in a channel to trigger a background restart of the bot service (runs `geminiclaw service restart`). This will disconnect the bot temporarily.
  
-## Attachments Support
- 
-Gemini Claw supports two-way attachment handling:
-- **Inbound:** Downloads Discord message attachments (files, images, etc.) and makes them available to the Gemini CLI agent in its workspace.
-- **Outbound:** The agent can send files from its workspace back to you by including `[attachment: path/to/file]` in its response. The bot automatically uploads these files to Discord.
- 
-### Configuration
-You can configure the directory where attachments are saved in your `config.toml` under the `[gemini]` section:
- 
-```toml
-[gemini]
-# Optional: The directory to save attachments to (relative to workspace or absolute).
-# Defaults to "attachments" inside the workspace.
-attachments_dir = "attachments"
-```
-
-## Channel Routing
-
-The agent can route its response to a specific Discord channel instead of the current one by including the syntax `[to_channel: <channel_id>]` in its response. The bot will extract the channel ID, fetch that channel, and send the response there. The tag will be removed from the final message content.
+# Configuration
+Every configurable option is stored in `config.toml` file. Read the comments
+for instructions.
 
 ## Always Reply (Whitelist)
 
@@ -162,15 +110,6 @@ Add the `always_reply` list to your `config.toml` file under the `[discord]` sec
 ```toml
 [discord]
 always_reply = ["user1", "user2"]
-```
-
-## Security Policy
-
-You can enforce safety boundaries or tool usage restrictions by specifying policy configuration files in `config.toml`. The bot will automatically inject these as multiple `--policy <file>` arguments to every Gemini CLI invocation.
-
-```toml
-[gemini]
-policy = ["/path/to/my_policy.yaml", "/path/to/another_policy.yaml"]
 ```
 
 ## Prompt Customization
@@ -200,9 +139,9 @@ silent = false                               # Optional: Set to true to run the 
 probability = 1.0                            # Optional: Probability of execution (0.0 to 1.0)
 ```
 
-### 📖 Tutorial: How to find your Discord User ID
+# 📖 Tip: How to find your Discord User ID & Channel ID
 
-To automatically join threads created by cronjobs, populate the `mention_user_id` field.
+Some settings needs your discord channel id or user id. Here is how to find them:
 
 1. **Enable Developer Mode**:
    - Go to Discord **User Settings** -> **Advanced**.
@@ -212,9 +151,15 @@ To automatically join threads created by cronjobs, populate the `mention_user_id
    - Right-click your **avatar/name** in any member list or chat.
    - Click **Copy User ID** at the bottom of the menu.
 
-## Tutorials
+3. **Copy Channel ID**:
+   - Right-click your **channel name** in the channel list.
+   - Click **Copy Channel ID** at the bottom of the menu.
+
+# Tutorials
 
 For more advanced usage, check out our dedicated tutorials:
-- [Role Playing with Custom Prompts and Discord Topics](tutorials/role_playing.md)
-- [Memory Management using GeminiClawDock](tutorials/memory_management.md)
-- [Automatic Backup and Maintenance using Cronjobs](tutorials/automatic_backup.md)
+
+- [Role Playing](tutorials/role_playing.md)
+- [Memory Management](tutorials/memory_management.md)
+- [Background Tasks](tutorials/background_tasks.md)
+- [Security](tutorials/security.md)

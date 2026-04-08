@@ -1,37 +1,47 @@
-# Role Playing with Custom Prompts and Discord Topics
+# Role Playing with Gemini Claw
 
-GeminiClaw is highly flexible and can be instructed to adopt specific personas or follow distinct role-playing scenarios. There are two primary ways to set up role-playing: globally using custom prompt files, or per-channel using Discord topics.
+Gemini Claw supports robust role-playing capabilities by leveraging the injected system instructions and character files in the Gemini workspace. This guide explains how role playing is constructed and how you can define your own characters.
 
-## Method 1: Using Custom Prompts (Global)
+---
 
-If you want your bot to have a consistent persona across all interactions, you can use custom markdown files for the system prompt. The [GeminiClawDock](https://github.com/codescv/GeminiClawDock) template provides an excellent structure for this.
+## How Role Playing Works
 
-1. **Create Persona Files**: In your workspace, create files like `notes/Settings/Soul.md` or `notes/Settings/User.md`. In these files, define the bot's identity, its goals, the rules it should follow, and your customized background.
-2. **Configure `config.toml`**: Inject these files into the bot's base system prompt by referencing them in your `config.toml` under the `[prompt]` section:
+Role playing in Gemini Claw is driven by the workspace files copied to your current directory during `geminiclaw init`. By providing specific instructions and character reference assets, the agent can embody any desired persona and create consistent, personalized responses—including speech, images, and videos.
 
-```toml
-[prompt]
-user = [
-    "notes/Settings/Rules.md",
-    "notes/Settings/Soul.md",
-    "notes/Settings/User.md"
-]
-```
+### Directory Structure
 
-Every time the bot responds, it will read these files and adopt the persona defined within them.
+The core assets for role playing reside directly in your workspace:
+- `instructions/`: Contains instructions for the agent on how to handle role playing and other general rules.
+- `roles/`: Contains dedicated folders for each character persona.
 
-## Method 2: Using Discord Channel Topics (Per-Channel)
+---
 
-If you want different channels to have different role-play scenarios (e.g., a "pirate-tavern" channel and a "sci-fi-bridge" channel) without running multiple bot instances, you can use Discord channel topics.
+## Defining a Character
 
-1. **Edit Channel Topic**: Right-click a text channel in Discord, select **Edit Channel**, and write your prompt instructions in the **Channel Topic** field. For example: `You are a helpful and enthusiastic pirate. Respond to all queries with nautical slang.`
-2. **Interact**: Whenever a user talks to the bot in that channel (or in a thread created within that channel), GeminiClaw will automatically read the channel topic and inject it into the prompt.
+To create a new role, create a new folder under `roles/` with the character's name (e.g., `roles/kurisu/`). Inside this folder, you define the character's identity, style, memories, and references.
 
-The bot sees this as:
-```text
----BEGIN TOPIC INSTRUCTIONS---
-You are a helpful and enthusiastic pirate. Respond to all queries with nautical slang.
----END TOPIC INSTRUCTIONS---
-```
+### Character Card (`intro.md`)
 
-This makes it incredibly easy to create dynamic, context-specific role-playing environments on your server on the fly!
+The `intro.md` file serves as the primary system prompt for the character. It should clearly define:
+- **Core Identity (Essence):** Name, age, profession, aliases, and core personality traits.
+- **Language Style:** How the character communicates (e.g., logical, sarcastic, mixed languages, specific catchphrases).
+- **Key Memories:** Important backstory events that influence the character's worldview and reactions.
+- **Interaction Rules:** Specific triggers and how the character's attitude evolves as the conversation progresses.
+- **Visual Characteristics:** Hair color, eye color, and signature attire for visual generation consistency.
+
+### Reference Assets
+
+In addition to textual descriptions, you can supply reference assets for the agent to use when generating multimedia content:
+- **Audio References (`roles/{character_name}/audio/`):** Provide sample voice clips. When generating text-to-speech (TTS), the agent uses these reference files (e.g., using the voice clone feature with the reference file's base name).
+- **Image / Video References (`roles/{character_name}/images/` or `video/`):** Provide reference images and short clips. When rendering visuals, the agent utilizes **image-to-image** or **image-to-video** tools conditioned on these reference assets to ensure visual consistency with the character.
+
+---
+
+## Multimedia Generation Guidelines
+
+When role-playing, the agent automatically follows these rules to ensure all interactions stay in character:
+
+1. **Never use pure text-to-image or text-to-video:** If the character is present in the request, pure generative tools are prohibited. Instead, the agent uses **reference image + prompt -> generated image** to ensure consistent visual traits.
+2. **Speech & Voice Cloning:** When generating voices, the agent employs TTS combined with voice cloning based on the provided audio files in the character folder.
+3. **Talking Videos:** The agent can create animated talking character videos by generating the visual and audio tracks separately, and then combining them via lipsync or audio merging tools.
+

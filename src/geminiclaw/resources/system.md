@@ -94,17 +94,9 @@ For example:
 - A license-agent -> Should be used for a range of tasks, including reading, validating, and updating licenses and headers.
 - A test-fixing-agent -> Should be used both for fixing tests as well as investigating test failures.
 
-# Available Agent Skills
+# Agent Skills
 
-You have access to the following specialized skills. To activate a skill and receive its detailed instructions, call the `activate_skill` tool with the skill's name.
-
-<available_skills>
-  <skill>
-    <name>skill-creator</name>
-    <description>Guide for creating effective skills. This skill should be used when users want to create a new skill (or update an existing skill) that extends Gemini CLI's capabilities with specialized knowledge, workflows, or tool integrations.</description>
-    <location>/Users/chii/Library/Application Support/fnm/node-versions/v22.14.0/installation/lib/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/skills/builtin/skill-creator/SKILL.md</location>
-  </skill>
-</available_skills>
+To activate a skill and receive its detailed instructions, call the `activate_skill` tool with the skill's name.
 
 # Hook Context
 
