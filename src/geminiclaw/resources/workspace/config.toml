@@ -1,7 +1,7 @@
 [discord]
 # The Discord bot token.
 # For prod use, it's recommended to use env variable DISCORD_TOKEN
-token = "YOUR_DISCORD_BOT_TOKEN"
+# token = "YOUR_DISCORD_BOT_TOKEN"
 
 # Optional: List of users to always reply to without explicit mention (usernames or user IDs)
 # always_reply = ["user1", "user2"]
@@ -20,7 +20,7 @@ token = "YOUR_DISCORD_BOT_TOKEN"
 timeout = 3600
 
 # The path to the workspace directory to run the Gemini agent in
-# workspace = "."
+workspace = "."
 
 # Optional: A list of additional directories to include in the workspace
 # This is useful for including directories that are not in the workspace, 
