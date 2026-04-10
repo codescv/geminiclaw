@@ -421,7 +421,7 @@ class Agent:
     async def _stream_gemini_output(self, process, channel, author_id, msg_id_db, timeout_seconds):
         """Process standard asynchronous stream output from the Gemini CLI."""
         final_response = ""
-        sender = await self.bot.create_stream_sender(channel.id, channel)
+        await self.bot.stream_start(channel.id, channel)
 
         async def read_stream():
             nonlocal final_response
@@ -439,7 +439,7 @@ class Agent:
                     if parsed.get("type") == "message" and parsed.get("role") == "assistant":
                         content = parsed.get("content", "")
                         final_response += content
-                        await sender.send(content)
+                        await self.bot.stream_send(channel.id, content)
                     elif parsed.get("type") == "result":
                         print("===result", parsed)
                     elif parsed.get("session_id"):
@@ -447,23 +447,21 @@ class Agent:
                 except json.JSONDecodeError:
                     print("===json error", line_str)
 
+        error = None
         try:
             async with channel.typing():
                 await read_stream()
 
-            await sender.flush()
-
             await process.wait()
             stderr_output = await process.stderr.read()
-            error = stderr_output.decode().strip()
+            if stderr_output:
+                error = stderr_output.decode().strip()
 
             if not final_response:
                 if isinstance(process.returncode, int) and process.returncode < 0:
                     final_response = "Stopped by user."
                 elif error:
                     final_response = f"Error: {error}"
-                    if sender.msg_to_edit:
-                        await sender.msg_to_edit.edit(content=final_response)
                 else:
                     final_response = "Gemini completed but returned no output."
 
@@ -474,14 +472,12 @@ class Agent:
             except ProcessLookupError:
                 pass
             final_response = f"Error: Gemini command timed out after {timeout_seconds} seconds."
-            if sender.msg_to_edit:
-                try:
-                    await sender.msg_to_edit.edit(content=final_response)
-                except:
-                    pass
+            error = final_response
 
-        if not sender.streamed and final_response:
-            await sender.send(final_response, flush=True)
+        if error:
+            await self.bot.stream_end(channel.id, error=error)
+        else:
+            await self.bot.stream_end(channel.id, final_text=final_response)
 
         return final_response
 

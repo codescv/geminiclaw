@@ -99,6 +99,7 @@ class DiscordBot(commands.Bot):
         self.always_reply = always_reply or []
         self.max_response_length = max_response_length
         self.agent = None  # Will be set by main()
+        self._active_streams = {}
 
     async def on_ready(self):
         print(f'Logged in as {self.user.name} ({self.user.id})')
@@ -112,12 +113,32 @@ class DiscordBot(commands.Bot):
             stream_off = stream_off or (str(channel.parent_id) in self.stream_off_channels)
         return stream_off
 
-    async def create_stream_sender(self, channel_id: str, channel=None):
+    async def stream_start(self, channel_id: str, channel=None):
         if not channel:
             channel = self.get_channel(int(channel_id))
             if not channel:
                 channel = await self.fetch_channel(int(channel_id))
-        return StreamSender(self, channel)
+        sender = StreamSender(self, channel)
+        self._active_streams[str(channel_id)] = sender
+
+    async def stream_send(self, channel_id: str, chunk: str):
+        sender = self._active_streams.get(str(channel_id))
+        if sender:
+            await sender.send(chunk)
+
+    async def stream_end(self, channel_id: str, final_text: str = None, error: str = None):
+        sender = self._active_streams.pop(str(channel_id), None)
+        if sender:
+            if error:
+                if sender.msg_to_edit:
+                    try:
+                        await sender.msg_to_edit.edit(content=error)
+                    except:
+                        pass
+                else:
+                    await sender.channel.send(error)
+            else:
+                await sender.flush()
 
     async def process_pending_messages(self):
         if self.agent:
