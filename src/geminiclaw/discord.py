@@ -276,7 +276,7 @@ class DiscordBot(commands.Bot):
             )
         return instructions
 
-    async def ensure_thread_for_cronjob(self, channel_id: str, prompt: str, mention_user_id: str) -> str:
+    async def ensure_thread_for_cronjob(self, channel_id: str, prompt: str, mention_user_id: str, gemini_session_id: str) -> str:
         channel = self.get_channel(int(channel_id))
         if not channel:
             try:
@@ -289,9 +289,9 @@ class DiscordBot(commands.Bot):
                     thread_name = await self.generate_thread_summary(prompt if prompt else "Cronjob")
                     thread = await channel.create_thread(name=thread_name, type=discord.ChannelType.public_thread)
                     db.set_thread_active(thread.id, True)
-                    session_id = db.get_thread_session(channel.id)
-                    if session_id:
-                        db.set_thread_session(thread.id, session_id)
+                    logger.info(f"bind thread {thread.id} to gemini session: {gemini_session_id}")
+                    if gemini_session_id:
+                        db.set_thread_session(thread.id, gemini_session_id)
                     msg_text = f"<@{mention_user_id}>" if mention_user_id else "Executing cronjob...*"
                     await thread.send(msg_text)
                     return str(thread.id)

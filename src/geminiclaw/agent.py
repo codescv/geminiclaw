@@ -264,6 +264,7 @@ class Agent:
         """Collect synchronous (buffered) output from the Gemini CLI."""
         final_response = ""
         error = ""
+        gemini_session_id = ""
         
         try:
             async with self.bot.typing(channel_id):
@@ -278,9 +279,11 @@ class Agent:
                             response_text = parsed.get("response", "")
                             if response_text:
                                 final_response = response_text
-                            
+
                             if parsed.get("session_id"):
-                                db.set_thread_session(channel_id, parsed.get("session_id"))
+                                gemini_session_id = parsed.get("session_id")
+                                db.set_thread_session(channel_id, gemini_session_id)
+                                
                     except json.JSONDecodeError:
                         logger.exception(f"json error: {output}")
                         
@@ -312,7 +315,7 @@ class Agent:
                 final_response = final_response.replace(match.group(0), "").strip()
 
         if is_cronjob and final_response:
-            channel_id = await self.bot.ensure_thread_for_cronjob(channel_id, prompt, mention_user_id)
+            channel_id = await self.bot.ensure_thread_for_cronjob(channel_id, prompt, mention_user_id, gemini_session_id)
 
         if final_response:
             clean_text = re.sub(r'\[attachment:\s*.*?\]', '', final_response)
