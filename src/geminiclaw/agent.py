@@ -8,7 +8,6 @@ import re
 import random
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-import discord
 
 from . import db
 
@@ -23,7 +22,14 @@ class Agent:
     and routing logic for multi-bot interactions.
     """
 
-    def __init__(self, bot, gemini_config: dict, prompt_config: dict = None, stream_off_channels: list = None, max_response_length: int = 1900, policy: list = None, cronjobs: list = None):
+    def __init__(self,
+        bot,
+        gemini_config: dict,
+        prompt_config: dict = None,
+        stream_off_channels: list = None,
+        max_response_length: int = 1900,
+        policy: list = None,
+        cronjobs: list = None):
         """
         Initialize the Agent with bot capabilities and configurations.
 
@@ -78,7 +84,12 @@ class Agent:
                 print(f"Warning: Cronjob skipped {job_config} (missing channel_id, schedule, or prompt file)")
         self.scheduler.start()
 
-    async def run_cronjob(self, prompt_file: str, channel_id, mention_user_id=None, silent: bool = False, probability=None):
+    async def run_cronjob(
+        self, prompt_file: str,
+        channel_id,
+        mention_user_id=None,
+        silent: bool = False,
+        probability=None):
         """
         Execute a configured cronjob, running the underlying Gemini CLI process.
 
@@ -145,9 +156,11 @@ class Agent:
         except Exception as e:
             print(f"Error running cronjob {prompt_file}: {e}")
 
-
-
-    async def _execute_gemini_command(self, prompt: str, channel_id, author_id, channel, is_cronjob: bool = False):
+    async def _execute_gemini_command(
+        self, prompt: str,
+        channel_id,
+        author_id,
+        is_cronjob: bool = False):
         """Construct and invoke the Gemini CLI subprocess for a given prompt context."""
         gemini_exec = self.gemini_config.get('executable_path', 'gemini')
         args = [gemini_exec]
@@ -168,7 +181,7 @@ class Agent:
         if thread_session:
             args.extend(['-r', thread_session])
         
-        if self.bot.is_stream_off(channel_id, channel) or is_cronjob:
+        if self.bot.is_stream_off(str(channel_id)) or is_cronjob:
             args.extend(['-o', 'json'])
         else:
             args.extend(['-o', 'stream-json'])
@@ -345,10 +358,10 @@ class Agent:
 
         return final_response, channel_id
 
-    async def _stream_gemini_output(self, process, channel, author_id, msg_id_db, timeout_seconds):
+    async def _stream_gemini_output(self, process, channel_id, author_id, msg_id_db, timeout_seconds):
         """Process standard asynchronous stream output from the Gemini CLI."""
         final_response = ""
-        await self.bot.stream_start(channel.id, channel)
+        await self.bot.stream_start(channel_id)
 
         async def read_stream():
             nonlocal final_response
@@ -366,17 +379,17 @@ class Agent:
                     if parsed.get("type") == "message" and parsed.get("role") == "assistant":
                         content = parsed.get("content", "")
                         final_response += content
-                        await self.bot.stream_send(channel.id, content)
+                        await self.bot.stream_send(channel_id, content)
                     elif parsed.get("type") == "result":
                         print("===result", parsed)
                     elif parsed.get("session_id"):
-                        db.set_thread_session(channel.id, parsed.get("session_id"))
+                        db.set_thread_session(channel_id, parsed.get("session_id"))
                 except json.JSONDecodeError:
                     print("===json error", line_str)
 
         error = None
         try:
-            async with channel.typing():
+            async with self.bot.typing(channel_id):
                 await read_stream()
 
             await process.wait()
@@ -402,14 +415,14 @@ class Agent:
             error = final_response
 
         if error:
-            await self.bot.stream_end(channel.id, error=error)
+            await self.bot.stream_end(channel_id, error=error)
         else:
-            await self.bot.stream_end(channel.id, final_text=final_response)
+            await self.bot.stream_end(channel_id, final_text=final_response)
 
         return final_response
 
-    async def _handle_outbound_attachments(self, final_response: str, channel, cwd: str):
-        """Extract attachment references from the Gemini response and upload local files to Discord."""
+    async def _handle_outbound_attachments(self, final_response: str, channel_id, cwd: str):
+        """Extract attachment references from the Gemini response and upload local files to chat bot."""
         outbound_files = []
         if final_response:
             for match in re.finditer(r'\[attachment:\s*(.+?)\]', final_response):
@@ -420,21 +433,7 @@ class Agent:
                         outbound_files.append(full_path)
 
         if outbound_files:
-            for i in range(0, len(outbound_files), 10):
-                batch_paths = outbound_files[i:i+10]
-                discord_files = []
-                for path in batch_paths:
-                    try:
-                        discord_files.append(discord.File(path))
-                    except Exception as e:
-                        print(f"Error preparing file {path}: {e}")
-                
-                if discord_files:
-                    try:
-                        await channel.send("", files=discord_files)
-                    except Exception as e:
-                        print(f"Error sending files: {e}")
-                        await channel.send(f"Failed to send some attachments: {e}")
+            await self.bot.send_attachments(channel_id, outbound_files)
 
     async def process_single_message(self, row):
         """Retrieve, lock, execute, and deliver a single database message record to the agent."""

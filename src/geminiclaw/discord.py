@@ -107,8 +107,9 @@ class DiscordBot(commands.Bot):
             self.loop.create_task(self.agent.process_pending_messages_loop())
             await self.agent.start_cronjobs()
 
-    def is_stream_off(self, channel_id: str, channel=None) -> bool:
+    def is_stream_off(self, channel_id: str) -> bool:
         stream_off = str(channel_id) in self.stream_off_channels
+        channel = self.get_channel(int(channel_id))
         if channel and isinstance(channel, discord.Thread) and getattr(channel, 'parent_id', None):
             stream_off = stream_off or (str(channel.parent_id) in self.stream_off_channels)
         return stream_off
