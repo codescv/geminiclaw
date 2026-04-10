@@ -24,7 +24,6 @@ def main(service_name="com.codescv.geminiclaw"):
         service_name=service_name,
         always_reply=config.always_reply,
         stream_off_channels=config.stream_off_channels,
-        max_response_length=1900,
         command_prefix="!",
         intents=intents,
         proxy=config.proxy
@@ -34,7 +33,6 @@ def main(service_name="com.codescv.geminiclaw"):
         bot=bot,
         gemini_config=config.gemini,
         prompt_config=config.prompt,
-        max_response_length=1900,
         policy=config.policy,
         cronjobs=config.cronjobs
     )

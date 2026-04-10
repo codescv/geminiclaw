@@ -59,13 +59,13 @@ async def test_send_long_message_lines_split(bot_instance):
 async def test_send_long_message_hard_split(bot_instance):
     channel = AsyncMock()
     # Create a single line that exceeds max_response_length
-    content = "a" * (bot_instance.max_response_length + 10)
+    content = "a" * (bot_instance.MAX_RESPONSE_LENGTH + 10)
     sender = StreamSender(bot_instance, channel)
     await sender.send(content, flush=True)
     
     assert channel.send.call_count == 2
     calls = channel.send.call_args_list
-    assert calls[0][0][0] == "a" * bot_instance.max_response_length
+    assert calls[0][0][0] == "a" * bot_instance.MAX_RESPONSE_LENGTH
     assert calls[1][0][0] == "a" * 10
 
 @pytest.mark.asyncio
@@ -74,7 +74,7 @@ async def test_send_long_message_mixed_split(bot_instance):
     # line1 fits
     line1 = "a" * 100 + "\n"
     # line2 is huge
-    line2 = "b" * (bot_instance.max_response_length + 100) + "\n"
+    line2 = "b" * (bot_instance.MAX_RESPONSE_LENGTH + 100) + "\n"
     # line3 fits
     line3 = "c" * 100
     
@@ -85,7 +85,7 @@ async def test_send_long_message_mixed_split(bot_instance):
     assert channel.send.call_count == 3
     calls = channel.send.call_args_list
     assert calls[0][0][0] == line1
-    assert calls[1][0][0] == ("b" * (bot_instance.max_response_length + 100) + "\n")[:bot_instance.max_response_length]
+    assert calls[1][0][0] == ("b" * (bot_instance.MAX_RESPONSE_LENGTH + 100) + "\n")[:bot_instance.MAX_RESPONSE_LENGTH]
     assert calls[2][0][0] == ("b" * 100) + "\n" + line3
 
 @pytest.mark.asyncio

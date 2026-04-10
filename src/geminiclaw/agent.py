@@ -30,7 +30,6 @@ class Agent:
         bot,
         gemini_config: dict,
         prompt_config: dict = None,
-        max_response_length: int = 1900,
         policy: list = None,
         cronjobs: list = None):
         """
@@ -40,14 +39,12 @@ class Agent:
             bot: The running chat bot instance.
             gemini_config: Configuration mapping for the Gemini CLI (e.g., timeout, workspace).
             prompt_config: Paths to prompt templates.
-            max_response_length: Maximum output length before message pagination.
             policy: A list of policy definitions to pass to the Gemini CLI.
             cronjobs: Scheduled messaging jobs configurations.
         """
         self.bot = bot
         self.gemini_config = gemini_config
         self.prompt_config = prompt_config or {}
-        self.max_response_length = max_response_length
         self.policy = policy or []
         self.cronjobs = cronjobs or []
         
@@ -318,27 +315,7 @@ class Agent:
             channel_id = await self.bot.ensure_thread_for_cronjob(channel_id, prompt, mention_user_id, gemini_session_id)
 
         if final_response:
-            clean_text = re.sub(r'\[attachment:\s*.*?\]', '', final_response)
-            if clean_text.strip():
-                lines = clean_text.splitlines(keepends=True)
-                chunk = ""
-                for line in lines:
-                    if len(chunk) + len(line) <= self.max_response_length:
-                        chunk += line
-                    else:
-                        if chunk.strip():
-                            await self.bot.send_message(channel_id, chunk)
-                        
-                        residue = line
-                        while len(residue) > self.max_response_length:
-                            part = residue[:self.max_response_length]
-                            if part.strip():
-                                await self.bot.send_message(channel_id, part)
-                            residue = residue[self.max_response_length:]
-                        chunk = residue
-                        
-                if chunk.strip():
-                    await self.bot.send_message(channel_id, chunk)
+            await self.bot.send_message(channel_id, final_response)
 
         return final_response, channel_id
 

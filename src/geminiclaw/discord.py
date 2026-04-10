@@ -15,7 +15,7 @@ class StreamSender:
         return re.sub(r'\[attachment:\s*.*?\]', '', text)
 
     def _split_elegant(self, text):
-        max_len = self.bot.max_response_length
+        max_len = self.bot.MAX_RESPONSE_LENGTH
         last_newline = text[:max_len].rfind('\n')
         if last_newline != -1:
             return text[:last_newline+1], text[last_newline+1:]
@@ -37,7 +37,7 @@ class StreamSender:
             return
 
         if self.msg_to_edit:
-            if len(self.current_chunk) > self.bot.max_response_length:
+            if len(self.current_chunk) > self.bot.MAX_RESPONSE_LENGTH:
                 first_part, residue = self._split_elegant(self.current_chunk)
                 edited_message = first_part
                 await self.msg_to_edit.edit(content=edited_message)
@@ -67,16 +67,16 @@ class StreamSender:
         last_msg = None
         
         for line in lines:
-            if len(current_chunk) + len(line) <= self.bot.max_response_length:
+            if len(current_chunk) + len(line) <= self.bot.MAX_RESPONSE_LENGTH:
                 current_chunk += line
             else:
                 if current_chunk:
                     last_msg = await self._send_chunk_impl(current_chunk)
                 
                 residue = line
-                while len(residue) > self.bot.max_response_length:
-                    last_msg = await self._send_chunk_impl(residue[:self.bot.max_response_length])
-                    residue = residue[self.bot.max_response_length:]
+                while len(residue) > self.bot.MAX_RESPONSE_LENGTH:
+                    last_msg = await self._send_chunk_impl(residue[:self.bot.MAX_RESPONSE_LENGTH])
+                    residue = residue[self.bot.MAX_RESPONSE_LENGTH:]
                 current_chunk = residue
                 
         if current_chunk:
@@ -95,12 +95,13 @@ class StreamSender:
 
 
 class DiscordBot(commands.Bot):
-    def __init__(self, gemini_config, service_name="com.codescv.geminiclaw", cronjobs=None, prompt_config=None, always_reply=None, stream_off_channels=None, max_response_length=1900, policy=None, *args, **kwargs):
+    MAX_RESPONSE_LENGTH = 1900
+
+    def __init__(self, gemini_config, service_name="com.codescv.geminiclaw", cronjobs=None, prompt_config=None, always_reply=None, stream_off_channels=None, policy=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.service_name = service_name
         self.gemini_config = gemini_config
         self.always_reply = always_reply or []
-        self.max_response_length = max_response_length
         self.stream_off_channels = stream_off_channels or []
         self.agent = None  # Will be set by main()
         self._active_streams = {}
@@ -199,7 +200,27 @@ class DiscordBot(commands.Bot):
             except:
                 pass
         if channel:
-            await channel.send(content)
+            clean_text = re.sub(r'\[attachment:\s*.*?\]', '', content)
+            if clean_text.strip():
+                lines = clean_text.splitlines(keepends=True)
+                chunk = ""
+                for line in lines:
+                    if len(chunk) + len(line) <= self.MAX_RESPONSE_LENGTH:
+                        chunk += line
+                    else:
+                        if chunk.strip():
+                            await channel.send(chunk)
+                        
+                        residue = line
+                        while len(residue) > self.MAX_RESPONSE_LENGTH:
+                            part = residue[:self.MAX_RESPONSE_LENGTH]
+                            if part.strip():
+                                await channel.send(part)
+                            residue = residue[self.MAX_RESPONSE_LENGTH:]
+                        chunk = residue
+                        
+                if chunk.strip():
+                    await channel.send(chunk)
 
     async def send_attachments(self, channel_id: str, file_paths: list[str]):
         channel = self.get_channel(int(channel_id))
