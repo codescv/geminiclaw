@@ -349,6 +349,7 @@ class Agent:
                     logger.exception(f"json error: {line_str}")
 
         error = ""
+        stderr_output = ""
         try:
             async with self.bot.typing(channel_id):
                 await read_stream()

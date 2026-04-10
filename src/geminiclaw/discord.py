@@ -32,6 +32,8 @@ class StreamSender:
         if not self.current_chunk:
             return
 
+        # logger.info(f"current chunk: {self.current_chunk} flush: {flush}")
+
         if self.msg_to_edit:
             if len(self.current_chunk) > self.bot.MAX_RESPONSE_LENGTH:
                 first_part, residue = self._split_elegant(self.current_chunk)
@@ -43,6 +45,9 @@ class StreamSender:
             else:
                 suffix = "" if flush else " (incomplete)"
                 edited_message = self.current_chunk + suffix
+                # logger.info(f"edit message to: '{edited_message}'")
+                if len(edited_message.strip()) == 0:
+                    edited_message = "\u200b"  # avoid empty message
                 await self.msg_to_edit.edit(content=edited_message)
                 if flush:
                     self.current_chunk = ""
@@ -73,6 +78,7 @@ class StreamSender:
                 
             cwd = self.bot.gemini_config.get('workspace', '.')
             full_path = os.path.abspath(os.path.normpath(os.path.join(cwd, path)))
+            logger.info(f"send attachment path: {full_path}")
             if os.path.isfile(full_path):
                 await self.bot.send_attachments(self.channel.id, [full_path])
                 
