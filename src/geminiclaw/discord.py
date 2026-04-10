@@ -106,9 +106,18 @@ class DiscordBot(commands.Bot):
             self.loop.create_task(self.agent.process_pending_messages_loop())
             await self.agent.start_cronjobs()
 
-    async def run_cronjob(self, prompt_file, channel_id, mention_user_id=None, silent=False, probability=None):
-        if self.agent:
-            await self.agent.run_cronjob(prompt_file, channel_id, mention_user_id, silent, probability)
+    def is_stream_off(self, channel_id: str, channel=None) -> bool:
+        stream_off = str(channel_id) in self.stream_off_channels
+        if channel and isinstance(channel, discord.Thread) and getattr(channel, 'parent_id', None):
+            stream_off = stream_off or (str(channel.parent_id) in self.stream_off_channels)
+        return stream_off
+
+    async def create_stream_sender(self, channel_id: str, channel=None):
+        if not channel:
+            channel = self.get_channel(int(channel_id))
+            if not channel:
+                channel = await self.fetch_channel(int(channel_id))
+        return StreamSender(self, channel)
 
     async def process_pending_messages(self):
         if self.agent:

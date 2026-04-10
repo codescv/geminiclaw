@@ -11,14 +11,13 @@ from apscheduler.triggers.cron import CronTrigger
 import discord
 
 from . import db
-from .discord import StreamSender
 
 OUTPUT_BUFFER_LIMIT = 2 ** 20  # 1MB
 NO_REPLY = "NO_REPLY"
 
 class Agent:
     """
-    The primary Agent class that bridges the Discord interface with the Gemini CLI.
+    The primary Agent class that bridges the Chat interface with the Gemini CLI.
     
     It manages subprocess execution, cron-based scheduled tasks, message stream mapping,
     and routing logic for multi-bot interactions.
@@ -29,7 +28,7 @@ class Agent:
         Initialize the Agent with bot capabilities and configurations.
 
         Args:
-            bot: The running discord bot instance.
+            bot: The running chat bot instance.
             gemini_config: Configuration mapping for the Gemini CLI (e.g., timeout, workspace).
             prompt_config: Paths to prompt templates.
             stream_off_channels: List of channel IDs where streaming is disabled.
@@ -146,13 +145,6 @@ class Agent:
         except Exception as e:
             print(f"Error running cronjob {prompt_file}: {e}")
 
-    def _is_stream_off(self, channel_id, channel=None) -> bool:
-        """Determine whether the streaming capability is disabled for a channel or its parent."""
-        stream_off = str(channel_id) in self.stream_off_channels
-        if channel and isinstance(channel, discord.Thread) and getattr(channel, 'parent_id', None):
-            stream_off = stream_off or (str(channel.parent_id) in self.stream_off_channels)
-        return stream_off
-
     def _get_channel_users_str(self, channel) -> str:
         """Retrieve the channel members and generate a formatted system prompt snippet."""
         user_list_str = ""
@@ -200,7 +192,7 @@ class Agent:
         if thread_session:
             args.extend(['-r', thread_session])
         
-        if self._is_stream_off(channel_id, channel) or is_cronjob:
+        if self.bot.is_stream_off(channel_id, channel) or is_cronjob:
             args.extend(['-o', 'json'])
         else:
             args.extend(['-o', 'stream-json'])
@@ -429,7 +421,7 @@ class Agent:
     async def _stream_gemini_output(self, process, channel, author_id, msg_id_db, timeout_seconds):
         """Process standard asynchronous stream output from the Gemini CLI."""
         final_response = ""
-        sender = StreamSender(self.bot, channel)
+        sender = await self.bot.create_stream_sender(channel.id, channel)
 
         async def read_stream():
             nonlocal final_response
@@ -572,7 +564,7 @@ class Agent:
             
             timeout_seconds = self.gemini_config.get('timeout', 600)
             
-            if self._is_stream_off(row['channel_id'], channel) or is_cronjob:
+            if self.bot.is_stream_off(row['channel_id'], channel) or is_cronjob:
                 final_response, channel = await self._get_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds, is_cronjob=is_cronjob, prompt=prompt, mention_user_id=mention_user_id)
             else:
                 final_response = await self._stream_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds)
