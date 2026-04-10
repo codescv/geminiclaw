@@ -140,6 +140,120 @@ class DiscordBot(commands.Bot):
             else:
                 await sender.flush()
 
+    async def channel_exists(self, channel_id: str) -> bool:
+        channel = self.get_channel(int(channel_id))
+        if not channel:
+            try:
+                channel = await self.fetch_channel(int(channel_id))
+            except:
+                pass
+        return channel is not None
+
+    async def get_channel_topic(self, channel_id: str) -> str:
+        channel = self.get_channel(int(channel_id))
+        if not channel:
+            try:
+                channel = await self.fetch_channel(int(channel_id))
+            except:
+                pass
+        if channel:
+            if isinstance(channel, discord.Thread) and hasattr(channel.parent, 'topic'):
+                return channel.parent.topic
+            elif hasattr(channel, 'topic'):
+                return channel.topic
+        return ""
+
+    async def get_channel_users_str(self, channel_id: str) -> str:
+        channel = self.get_channel(int(channel_id))
+        if not channel:
+            try:
+                channel = await self.fetch_channel(int(channel_id))
+            except:
+                pass
+        user_list_str = ""
+        if channel:
+            try:
+                members = []
+                if getattr(channel, 'type', None) == discord.ChannelType.private:
+                    if hasattr(channel, 'recipient') and channel.recipient:
+                        members = [channel.recipient]
+                elif hasattr(channel, 'members') and not isinstance(channel, discord.Thread):
+                    members = channel.members
+                elif hasattr(channel, 'parent') and hasattr(channel.parent, 'members'):
+                    members = channel.parent.members
+                elif hasattr(channel, 'guild') and hasattr(channel.guild, 'members'):
+                    members = channel.guild.members
+                valid_members = [m for m in members if m.id != self.user.id]
+                if valid_members:
+                    user_lines = []
+                    for m in valid_members[:5]:
+                        name = getattr(m, 'display_name', getattr(m, 'name', 'Unknown'))
+                        user_lines.append(f"  - {name} <@{m.id}>")
+                    user_list_str = "Here are some users in this channel you can mention:\n" + "\n".join(user_lines) + "\n"
+            except:
+                pass
+        return user_list_str
+
+    async def send_message(self, channel_id: str, content: str):
+        channel = self.get_channel(int(channel_id))
+        if not channel:
+            try:
+                channel = await self.fetch_channel(int(channel_id))
+            except:
+                pass
+        if channel:
+            await channel.send(content)
+
+    async def send_attachments(self, channel_id: str, file_paths: list[str]):
+        channel = self.get_channel(int(channel_id))
+        if not channel:
+            try:
+                channel = await self.fetch_channel(int(channel_id))
+            except:
+                pass
+        if channel:
+            discord_files = []
+            for path in file_paths:
+                try:
+                    discord_files.append(discord.File(path))
+                except:
+                    pass
+            if discord_files:
+                await channel.send("", files=discord_files)
+
+    def typing(self, channel_id: str):
+        channel = self.get_channel(int(channel_id))
+        if channel and hasattr(channel, 'typing'):
+            return channel.typing()
+        from contextlib import asynccontextmanager
+        @asynccontextmanager
+        async def noop():
+            yield
+        return noop()
+
+    async def get_system_instructions(self, channel_id: str) -> str:
+        user_list_str = await self.get_channel_users_str(channel_id)
+        topic = await self.get_channel_topic(channel_id)
+        
+        instructions = (
+            "---BEGIN DISCORD INSTRUCTIONS---\n"
+            f"You are chatting with the user in a discord channel. (channel id: {channel_id})\n"
+            f"Your own discord user name and id is {self.user.name} <@{self.user.id}>.\n"
+            "If you want to send a file to the user as an attachment, "
+            "use the exact syntax: [attachment: path/to/file].\n"
+            "The bot will extract this tag and upload the file to Discord.\n"
+            f"{user_list_str}"
+            "When you need to mention a user, use the strict syntax with the integer user id: <@user_id>\n"
+            "---END DISCORD INSTRUCTIONS---\n\n"
+        )
+        if topic and topic.strip():
+            instructions += (
+                f"---BEGIN TOPIC INSTRUCTIONS---\n"
+                f"{topic.strip()}\n"
+                f"---END TOPIC INSTRUCTIONS---\n\n"
+            )
+        return instructions
+
     async def process_pending_messages(self):
         if self.agent:
             busy_threads = list(self.agent.running_processes.keys())

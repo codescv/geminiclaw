@@ -85,8 +85,8 @@ class Agent:
         Args:
             prompt_file: The path to the prompt context file.
             channel_id: Target channel where output is sent (if not silent).
-            mention_user_id: Use the tag [mention:<id>] to ping the user in discord.
-            silent: If True, runs the CLI process strictly in the background without messaging discord.
+            mention_user_id: Use the tag [mention:<id>] to ping the user.
+            silent: If True, runs the CLI process strictly in the background without sending to chat bot.
             probability: Float representing the chance (0.0 to 1.0) that the cronjob runs.
         """
         if probability is not None:
@@ -145,31 +145,7 @@ class Agent:
         except Exception as e:
             print(f"Error running cronjob {prompt_file}: {e}")
 
-    def _get_channel_users_str(self, channel) -> str:
-        """Retrieve the channel members and generate a formatted system prompt snippet."""
-        user_list_str = ""
-        try:
-            members = []
-            if getattr(channel, 'type', None) == discord.ChannelType.private:
-                if hasattr(channel, 'recipient') and channel.recipient:
-                    members = [channel.recipient]
-            elif hasattr(channel, 'members') and not isinstance(channel, discord.Thread):
-                members = channel.members
-            elif hasattr(channel, 'parent') and hasattr(channel.parent, 'members'):
-                members = channel.parent.members
-            elif hasattr(channel, 'guild') and hasattr(channel.guild, 'members'):
-                members = channel.guild.members
-            
-            valid_members = [m for m in members if m.id != self.bot.user.id]
-            if valid_members:
-                user_lines = []
-                for m in valid_members[:5]:
-                    name = getattr(m, 'display_name', getattr(m, 'name', 'Unknown'))
-                    user_lines.append(f"  - {name} <@{m.id}>")
-                user_list_str = "Here are some users in this channel you can mention:\n" + "\n".join(user_lines) + "\n"
-        except Exception:
-            pass
-        return user_list_str
+
 
     async def _execute_gemini_command(self, prompt: str, channel_id, author_id, channel, is_cronjob: bool = False):
         """Construct and invoke the Gemini CLI subprocess for a given prompt context."""
@@ -259,36 +235,8 @@ class Agent:
                         except Exception as e:
                             print(f"Warning: Failed to read user prompt from {full_path}: {e}")
         
-        user_list_str = self._get_channel_users_str(channel)
+        system_prompt_content += await self.bot.get_system_instructions(channel_id)
 
-        discord_instructions = (
-            "---BEGIN DISCORD INSTRUCTIONS---\n"
-            f"You are chatting with the user in a discord channel. (channel id: {channel_id})\n"
-            f"Your own discord user name and id is {self.bot.user.name} <@{self.bot.user.id}>.\n"
-            "If you want to send a file to the user as an attachment, "
-            "use the exact syntax: [attachment: path/to/file].\n"
-            "The bot will extract this tag and upload the file to Discord.\n"
-            f"{user_list_str}"
-            "When you need to mention a user, use the strict syntax with the integer user id: <@user_id>\n"
-            "---END DISCORD INSTRUCTIONS---\n\n"
-        )
-        system_prompt_content += discord_instructions
-
-        topic = None
-        if isinstance(channel, discord.Thread):
-            if hasattr(channel.parent, 'topic'):
-                topic = channel.parent.topic
-        elif isinstance(channel, discord.TextChannel):
-            topic = channel.topic
-        
-        if topic and topic.strip():
-            topic_instructions = (
-                f"---BEGIN TOPIC INSTRUCTIONS---\n"
-                f"{topic.strip()}\n"
-                f"---END TOPIC INSTRUCTIONS---\n\n"
-            )
-            system_prompt_content += topic_instructions
-        
         system_prompt_path = f"/tmp/gemini_system_{channel_id}_{self.bot.user.id}.md"
         with open(system_prompt_path, "w") as f:
             f.write(system_prompt_content)
