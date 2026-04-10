@@ -254,6 +254,53 @@ class DiscordBot(commands.Bot):
             )
         return instructions
 
+    async def ensure_thread_for_cronjob(self, channel_id: str, prompt: str, mention_user_id: str) -> str:
+        channel = self.get_channel(int(channel_id))
+        if not channel:
+            try:
+                channel = await self.fetch_channel(int(channel_id))
+            except:
+                pass
+        if channel:
+            if not isinstance(channel, discord.Thread) and getattr(channel, 'type', None) != discord.ChannelType.private:
+                try:
+                    thread_name = await self.generate_thread_summary(prompt if prompt else "Cronjob")
+                    thread = await channel.create_thread(name=thread_name, type=discord.ChannelType.public_thread)
+                    db.set_thread_active(thread.id, True)
+                    session_id = db.get_thread_session(channel.id)
+                    if session_id:
+                        db.set_thread_session(thread.id, session_id)
+                    msg_text = f"<@{mention_user_id}>" if mention_user_id else "Executing cronjob...*"
+                    await thread.send(msg_text)
+                    return str(thread.id)
+                except:
+                    pass
+            else:
+                try:
+                    msg_text = f"<@{mention_user_id}>" if mention_user_id else "Executing cronjob...*"
+                    await channel.send(msg_text)
+                except:
+                    pass
+        return str(channel_id)
+
+    async def update_idle_thread_name(self, channel_id: str, response: str):
+        channel = self.get_channel(int(channel_id))
+        if not channel:
+            try:
+                channel = await self.fetch_channel(int(channel_id))
+            except:
+                pass
+        if channel and isinstance(channel, discord.Thread):
+            count = db.get_message_count(channel.id)
+            if count <= 4:
+                summary = await self.generate_thread_summary(response)
+                if summary and summary != channel.name:
+                    try:
+                        await channel.edit(name=summary)
+                    except:
+                        pass
+
+
     async def process_pending_messages(self):
         if self.agent:
             busy_threads = list(self.agent.running_processes.keys())

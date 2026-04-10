@@ -266,13 +266,13 @@ class Agent:
         )
         return process, system_prompt_path
 
-    async def _get_gemini_output(self, process, channel, author_id, msg_id_db, timeout_seconds, is_cronjob: bool = False, prompt: str = "", mention_user_id=None):
+    async def _get_gemini_output(self, process, channel_id, author_id, msg_id_db, timeout_seconds, is_cronjob: bool = False, prompt: str = "", mention_user_id=None):
         """Collect synchronous (buffered) output from the Gemini CLI."""
         final_response = ""
         error = ""
         
         try:
-            async with channel.typing():
+            async with self.bot.typing(channel_id):
                 stdout_bytes, stderr_bytes = await asyncio.wait_for(process.communicate(), timeout=timeout_seconds)
                 output = stdout_bytes.decode().strip()
                 error = stderr_bytes.decode().strip()
@@ -286,7 +286,7 @@ class Agent:
                                 final_response = response_text
                             
                             if parsed.get("session_id"):
-                                db.set_thread_session(channel.id, parsed.get("session_id"))
+                                db.set_thread_session(channel_id, parsed.get("session_id"))
                     except json.JSONDecodeError:
                         print("===json error", output)
                         
@@ -307,39 +307,18 @@ class Agent:
             final_response = f"Error: Gemini command timed out after {timeout_seconds} seconds."
 
         if NO_REPLY in final_response:
-            return NO_REPLY, channel
+            return NO_REPLY, channel_id
         
         match = re.search(r'\[to_channel:\s*(\d+)\]', final_response)
         if match:
-            target_id = int(match.group(1))
-            target_channel = self.bot.get_channel(target_id)
-            if not target_channel:
-                try:
-                    target_channel = await self.bot.fetch_channel(target_id)
-                except Exception:
-                    pass
-            if target_channel:
+            target_id = match.group(1)
+            if await self.bot.channel_exists(target_id):
                 print(f"Routing response to channel {target_id}")
-                channel = target_channel
+                channel_id = target_id
                 final_response = final_response.replace(match.group(0), "").strip()
 
         if is_cronjob and final_response:
-            if not isinstance(channel, discord.Thread) and not isinstance(channel, discord.DMChannel):
-                try:
-                    thread_name = await self.bot.generate_thread_summary(prompt if prompt else "Cronjob")
-                    thread = await channel.create_thread(name=thread_name, type=discord.ChannelType.public_thread)
-                    db.set_thread_active(thread.id, True)
-                    session_id = db.get_thread_session(channel.id)
-                    if session_id:
-                        db.set_thread_session(thread.id, session_id)
-                    print(f"Created thread {thread_name} ({thread.id}) for cronjob")
-                    await thread.send(f"<@{mention_user_id}>" if mention_user_id else "Executing cronjob...*")
-                    channel = thread
-                except Exception as e:
-                    print(f"Failed to create thread for cronjob: {e}")
-            else:
-                print(f"Cronjob output routed to existing thread or DM {channel.id}, sending execution message.")
-                await channel.send(f"<@{mention_user_id}>" if mention_user_id else "Executing cronjob...*")
+            channel_id = await self.bot.ensure_thread_for_cronjob(channel_id, prompt, mention_user_id)
 
         if final_response:
             clean_text = re.sub(r'\[attachment:\s*.*?\]', '', final_response)
@@ -351,20 +330,20 @@ class Agent:
                         chunk += line
                     else:
                         if chunk.strip():
-                            await channel.send(chunk)
+                            await self.bot.send_message(channel_id, chunk)
                         
                         residue = line
                         while len(residue) > self.max_response_length:
                             part = residue[:self.max_response_length]
                             if part.strip():
-                                await channel.send(part)
+                                await self.bot.send_message(channel_id, part)
                             residue = residue[self.max_response_length:]
                         chunk = residue
                         
                 if chunk.strip():
-                    await channel.send(chunk)
+                    await self.bot.send_message(channel_id, chunk)
 
-        return final_response, channel
+        return final_response, channel_id
 
     async def _stream_gemini_output(self, process, channel, author_id, msg_id_db, timeout_seconds):
         """Process standard asynchronous stream output from the Gemini CLI."""
@@ -488,30 +467,30 @@ class Agent:
             for attach in attachments:
                 prompt += f"\n- {attach}"
         
-        channel = self.bot.get_channel(channel_id)
-        if not channel:
-            try:
-                channel = await self.bot.fetch_channel(channel_id)
-            except Exception:
-                print(f"Could not fetch channel {channel_id}, skipping message.")
-                db.update_message_status(msg_id_db, 'failed', 'Channel not found or deleted')
-                self.running_processes.pop(str(row['channel_id']), None)
-                return
+        if not await self.bot.channel_exists(str(channel_id)):
+            print(f"Could not fetch channel {channel_id}, skipping message.")
+            db.update_message_status(msg_id_db, 'failed', 'Channel not found or deleted')
+            self.running_processes.pop(str(row['channel_id']), None)
+            return
 
         system_prompt_path = None
         try:
             is_cronjob = str(dict(row).get('message_id', '')) == "0"
-            process, system_prompt_path = await self._execute_gemini_command(prompt, row['channel_id'], author_id, channel, is_cronjob=is_cronjob)
+            process, system_prompt_path = await self._execute_gemini_command(prompt, str(channel_id), author_id, is_cronjob=is_cronjob)
             self.running_processes[str(row['channel_id'])] = process
 
             print(f"====system prompt file for message {msg_id_db} created: {system_prompt_path}")
             
             timeout_seconds = self.gemini_config.get('timeout', 600)
             
-            if self.bot.is_stream_off(row['channel_id'], channel) or is_cronjob:
-                final_response, channel = await self._get_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds, is_cronjob=is_cronjob, prompt=prompt, mention_user_id=mention_user_id)
+            if self.bot.is_stream_off(str(channel_id)) or is_cronjob:
+                final_response, actual_channel_id = await self._get_gemini_output(
+                    process, str(channel_id), author_id, msg_id_db, timeout_seconds, 
+                    is_cronjob=is_cronjob, prompt=prompt, mention_user_id=mention_user_id
+                )
             else:
-                final_response = await self._stream_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds)
+                final_response = await self._stream_gemini_output(process, str(channel_id), author_id, msg_id_db, timeout_seconds)
+                actual_channel_id = str(channel_id)
 
             db.update_message_status(msg_id_db, 'completed', final_response)
 
@@ -519,16 +498,8 @@ class Agent:
                 print(f"===Skipped reply for message {msg_id_db} prompt: {prompt[:120]}\n===")
                 return
 
-            await self._handle_outbound_attachments(final_response, channel, self.cwd)
-
-            if isinstance(channel, discord.Thread) and db.get_message_count(channel.id) <= 4:
-                summary = await self.bot.generate_thread_summary(final_response)
-                if summary and summary != channel.name:
-                    try:
-                        await channel.edit(name=summary)
-                        print(f"Updated thread name to: {summary}")
-                    except Exception as e:
-                        print(f"Failed to update thread name: {e}")
+            await self._handle_outbound_attachments(final_response, actual_channel_id, self.cwd)
+            await self.bot.update_idle_thread_name(actual_channel_id, final_response)
 
             db.update_message_status(msg_id_db, 'delivered')
 
