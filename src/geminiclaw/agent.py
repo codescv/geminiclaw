@@ -388,23 +388,17 @@ class Agent:
                 except json.JSONDecodeError:
                     logger.exception(f"json error: {line_str}")
 
-        error = None
+        error = ""
         try:
             async with self.bot.typing(channel_id):
                 await read_stream()
 
+            # wait for process to finish
             await process.wait()
-            stderr_output = await process.stderr.read()
-            if stderr_output:
-                error = stderr_output.decode().strip()
+            stderr_output = (await process.stderr.read()).decode().strip()
 
-            if not final_response:
-                if isinstance(process.returncode, int) and process.returncode < 0:
-                    final_response = "Stopped by user."
-                elif error:
-                    final_response = f"Error: {error}"
-                else:
-                    final_response = "Gemini completed but returned no output."
+            if isinstance(process.returncode, int) and process.returncode < 0:
+                error = "Stopped by user."
 
         except asyncio.TimeoutError:
             try:
@@ -412,13 +406,11 @@ class Agent:
                     os.killpg(process.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-            final_response = f"Error: Gemini command timed out after {timeout_seconds} seconds."
-            error = final_response
+            error = f"Error: Gemini command timed out after {timeout_seconds} seconds."
+        except:
+            error = stderr_output
 
-        if error:
-            await self.bot.stream_end(channel_id, error=error)
-        else:
-            await self.bot.stream_end(channel_id, final_text=final_response)
+        await self.bot.stream_end(channel_id, error=error)
 
         return final_response
 

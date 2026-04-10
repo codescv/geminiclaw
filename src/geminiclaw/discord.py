@@ -29,6 +29,7 @@ class StreamSender:
         self.streamed = False
 
     async def send(self, text=None, flush=False):
+        logger.error(f"sending text to channel {self.channel.id}")
         if text is not None:
             self.current_chunk += text
             
@@ -39,15 +40,15 @@ class StreamSender:
         if self.msg_to_edit:
             if len(self.current_chunk) > self.bot.max_response_length:
                 first_part, residue = self._split_elegant(self.current_chunk)
-                final_text = first_part
-                await self.msg_to_edit.edit(content=final_text)
+                edited_message = first_part
+                await self.msg_to_edit.edit(content=edited_message)
                 
                 self.msg_to_edit, last_text = await self.send_smart_chunks(residue, incomplete=not flush)
                 self.current_chunk = "" if flush else last_text
             else:
                 suffix = "" if flush else " (incomplete)"
-                final_text = self.current_chunk
-                await self.msg_to_edit.edit(content=final_text + suffix)
+                edited_message = self.current_chunk + suffix
+                await self.msg_to_edit.edit(content=edited_message)
                 if flush:
                     self.current_chunk = ""
         else:
@@ -130,19 +131,12 @@ class DiscordBot(commands.Bot):
         if sender:
             await sender.send(chunk)
 
-    async def stream_end(self, channel_id: str, final_text: str = None, error: str = None):
+    async def stream_end(self, channel_id: str, error: str = None):
         sender = self._active_streams.pop(str(channel_id), None)
-        if sender:
-            if error:
-                if sender.msg_to_edit:
-                    try:
-                        await sender.msg_to_edit.edit(content=error)
-                    except:
-                        pass
-                else:
-                    await sender.channel.send(error)
-            else:
-                await sender.flush()
+        if sender and error:
+            await sender.send(error)
+        elif sender:
+            await sender.flush()
 
     async def channel_exists(self, channel_id: str) -> bool:
         channel = self.get_channel(int(channel_id))
