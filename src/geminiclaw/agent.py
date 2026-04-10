@@ -374,19 +374,6 @@ class Agent:
 
         return final_response
 
-    async def _handle_outbound_attachments(self, final_response: str, channel_id, cwd: str):
-        """Extract attachment references from the Gemini response and upload local files to chat bot."""
-        outbound_files = []
-        if final_response:
-            for match in re.finditer(r'\[attachment:\s*(.+?)\]', final_response):
-                path = match.group(1).strip()
-                full_path = os.path.abspath(os.path.normpath(os.path.join(cwd, path)))
-                if os.path.isfile(full_path):
-                    if full_path not in outbound_files:
-                        outbound_files.append(full_path)
-
-        if outbound_files:
-            await self.bot.send_attachments(channel_id, outbound_files)
 
     async def process_single_message(self, row):
         """Retrieve, lock, execute, and deliver a single database message record to the agent."""
@@ -450,7 +437,6 @@ class Agent:
                 logger.info(f"Skipped reply for message {msg_id_db} prompt: {prompt[:120]}\n")
                 return
 
-            await self._handle_outbound_attachments(final_response, actual_channel_id, self.cwd)
             await self.bot.update_idle_thread_name(actual_channel_id, final_response)
 
             db.update_message_status(msg_id_db, 'delivered')

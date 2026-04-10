@@ -28,11 +28,7 @@ class StreamSender:
         self.current_chunk = ""
         self.streamed = False
 
-    async def send(self, text=None, flush=False):
-        if text is not None:
-            self.current_chunk += text
-            
-        self.current_chunk = self._clean_message(self.current_chunk)
+    async def _send_current_chunk(self, flush=False):
         if not self.current_chunk:
             return
 
@@ -57,6 +53,33 @@ class StreamSender:
             else:
                 self.msg_to_edit = await self.channel.send(self.current_chunk + " (incomplete)")
                 self.streamed = True
+
+    async def send(self, text=None, flush=False):
+        if text is not None:
+            self.current_chunk += text
+            
+        while True:
+            match = re.search(r'\[attachment:\s*(.+?)\]', self.current_chunk)
+            if not match:
+                break
+                
+            before_text = self.current_chunk[:match.start()]
+            path = match.group(1).strip()
+            after_text = self.current_chunk[match.end():]
+            
+            self.current_chunk = before_text
+            if self.current_chunk or self.msg_to_edit:
+                await self._send_current_chunk(flush=True)
+                
+            cwd = self.bot.gemini_config.get('workspace', '.')
+            full_path = os.path.abspath(os.path.normpath(os.path.join(cwd, path)))
+            if os.path.isfile(full_path):
+                await self.bot.send_attachments(self.channel.id, [full_path])
+                
+            self.current_chunk = after_text
+            self.msg_to_edit = None
+            
+        await self._send_current_chunk(flush=flush)
 
     async def flush(self):
         await self.send(flush=True)
@@ -192,6 +215,27 @@ class DiscordBot(commands.Bot):
                 logger.exception(f"Can't get user list for channel {channel_id}")
         return user_list_str
 
+    async def _send_plain_text(self, channel, text: str):
+        if not text.strip():
+            return
+        lines = text.splitlines(keepends=True)
+        chunk = ""
+        for line in lines:
+            if len(chunk) + len(line) <= self.MAX_RESPONSE_LENGTH:
+                chunk += line
+            else:
+                if chunk.strip():
+                    await channel.send(chunk)
+                residue = line
+                while len(residue) > self.MAX_RESPONSE_LENGTH:
+                    part = residue[:self.MAX_RESPONSE_LENGTH]
+                    if part.strip():
+                        await channel.send(part)
+                    residue = residue[self.MAX_RESPONSE_LENGTH:]
+                chunk = residue
+        if chunk.strip():
+            await channel.send(chunk)
+
     async def send_message(self, channel_id: str, content: str):
         channel = self.get_channel(int(channel_id))
         if not channel:
@@ -200,27 +244,24 @@ class DiscordBot(commands.Bot):
             except:
                 pass
         if channel:
-            clean_text = re.sub(r'\[attachment:\s*.*?\]', '', content)
-            if clean_text.strip():
-                lines = clean_text.splitlines(keepends=True)
-                chunk = ""
-                for line in lines:
-                    if len(chunk) + len(line) <= self.MAX_RESPONSE_LENGTH:
-                        chunk += line
-                    else:
-                        if chunk.strip():
-                            await channel.send(chunk)
-                        
-                        residue = line
-                        while len(residue) > self.MAX_RESPONSE_LENGTH:
-                            part = residue[:self.MAX_RESPONSE_LENGTH]
-                            if part.strip():
-                                await channel.send(part)
-                            residue = residue[self.MAX_RESPONSE_LENGTH:]
-                        chunk = residue
-                        
-                if chunk.strip():
-                    await channel.send(chunk)
+            cwd = self.gemini_config.get('workspace', '.')
+            remaining_text = content
+            while True:
+                match = re.search(r'\[attachment:\s*(.+?)\]', remaining_text)
+                if not match:
+                    break
+                
+                before_text = remaining_text[:match.start()]
+                path = match.group(1).strip()
+                remaining_text = remaining_text[match.end():]
+                
+                await self._send_plain_text(channel, before_text)
+                
+                full_path = os.path.abspath(os.path.normpath(os.path.join(cwd, path)))
+                if os.path.isfile(full_path):
+                    await self.send_attachments(channel_id, [full_path])
+                    
+            await self._send_plain_text(channel, remaining_text)
 
     async def send_attachments(self, channel_id: str, file_paths: list[str]):
         channel = self.get_channel(int(channel_id))
