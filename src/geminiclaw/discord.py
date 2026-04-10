@@ -472,7 +472,7 @@ class DiscordBot(commands.Bot):
                 logger.error(f"Failed to run restart command: {e}")
             return
 
-        if len(message.content.strip()) == 0:
+        if len(message.content.strip()) == 0 and not message.attachments:
             # empty message can happen with new thread created by someone else
             logger.info(f"Skipped empty message from {message.author}")
             return
@@ -559,9 +559,6 @@ class DiscordBot(commands.Bot):
                     prompt = f"[Previous Context]\n{history_text.strip()}\n\n[Current Message]\n{prompt}"
             except Exception as e:
                 logger.error(f"Error fetching history: {e}")
-        
-        if not prompt and not message.attachments:
-            return
         
         target_channel_id = message.channel.id
 
