@@ -166,7 +166,7 @@ class DiscordBot(commands.Bot):
             try:
                 channel = await self.fetch_channel(int(channel_id))
             except:
-                pass
+                logger.error(f"Can't get channel {channel_id}")
         user_list_str = ""
         if channel:
             try:
@@ -188,7 +188,7 @@ class DiscordBot(commands.Bot):
                         user_lines.append(f"  - {name} <@{m.id}>")
                     user_list_str = "Here are some users in this channel you can mention:\n" + "\n".join(user_lines) + "\n"
             except:
-                pass
+                logger.exception(f"Can't get user list for channel {channel_id}")
         return user_list_str
 
     async def send_message(self, channel_id: str, content: str):
@@ -242,6 +242,16 @@ class DiscordBot(commands.Bot):
         except Exception:
             pass
         return f"{author.display_name} <@{author_id}>" if author else f"<@{author_id}>"
+
+    def is_bot_mentioned(self, message: discord.Message) -> bool:
+        is_mentioned = self.user.mentioned_in(message)
+        if not is_mentioned and getattr(message, 'guild', None) and hasattr(message, 'role_mentions'):
+            bot_member = message.guild.get_member(self.user.id)
+            if bot_member:
+                for role in message.role_mentions:
+                    if role in bot_member.roles:
+                        return True
+        return is_mentioned
 
     async def get_system_instructions(self, channel_id: str) -> str:
         user_list_str = await self.get_channel_users_str(channel_id)
@@ -343,7 +353,7 @@ class DiscordBot(commands.Bot):
 
         is_thread = isinstance(message.channel, discord.Thread)
         is_dm = isinstance(message.channel, discord.DMChannel)
-        is_bot_mentioned = self.user.mentioned_in(message)
+        is_bot_mentioned = self.is_bot_mentioned(message)
 
         logger.info(f"Received Message: (first 120 chars)\n{message.content[:120]}\nfrom {message.author}\n"
               f"is_thread: {is_thread}\n is_dm: {is_dm}\n is_bot_mentioned: {is_bot_mentioned}")
@@ -413,12 +423,17 @@ class DiscordBot(commands.Bot):
                 is_always_reply = True
 
         if is_bot_mentioned or is_dm or is_always_reply:
-            logger.info('Replying to a message (mention, DM, or always_reply)')
-            should_reply = True
             if is_thread:
                 if not db.has_thread(message.channel.id):
                     is_new_thread_participant = True
-                db.set_thread_active(message.channel.id, True)
+                    db.set_thread_active(message.channel.id, True)
+                    should_reply = True
+                elif db.is_thread_active(message.channel.id):
+                    should_reply = True
+                else:
+                    logging.info(f"Thread {message.channel.id} is deactivated. Ignoring all message until -continue.")
+            else:
+                should_reply = True
         elif is_thread:
             if db.is_thread_active(message.channel.id):
                 if message.mentions:
@@ -429,7 +444,7 @@ class DiscordBot(commands.Bot):
             elif not db.has_thread(message.channel.id):
                 try:
                     starter_msg = await message.channel.parent.fetch_message(message.channel.id)
-                    if self.user.mentioned_in(starter_msg):
+                    if self.is_bot_mentioned(starter_msg):
                         logger.info(f'Recovering thread state for thread {message.channel.id}')
                         is_new_thread_participant = True
                         db.set_thread_active(message.channel.id, True)
@@ -444,7 +459,12 @@ class DiscordBot(commands.Bot):
 
         prompt = message.content
         for user in message.mentions:
-            prompt = prompt.replace(f'<@{user.id}>', f'@{user.display_name}').replace(f'<@!{user.id}>', f'@{user.display_name}')
+            prompt = (
+                prompt
+                .replace(f'<@{user.id}>', f'@{user.display_name}')
+                .replace(f'<@&{user.id}>', f'@{user.display_name}')
+                .replace(f'<@!{user.id}>', f'@{user.display_name}')
+            )
         prompt = prompt.strip()
 
         if is_new_thread_participant:

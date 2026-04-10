@@ -17,6 +17,7 @@ def main(service_name="com.codescv.geminiclaw"):
 
     intents = discord.Intents.default()
     intents.message_content = True
+    intents.members = True
 
     bot = DiscordBot(
         gemini_config=config.gemini,
