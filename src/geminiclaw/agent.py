@@ -1,0 +1,589 @@
+import os
+import signal
+import json
+import asyncio
+import subprocess
+import time
+import re
+import random
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+import discord
+
+from . import db
+from .discord import StreamSender
+
+OUTPUT_BUFFER_LIMIT = 2 ** 20  # 1MB
+NO_REPLY = "NO_REPLY"
+
+class Agent:
+    def __init__(self, bot, gemini_config, prompt_config=None, stream_off_channels=None, max_response_length=1900, policy=None, cronjobs=None):
+        self.bot = bot
+        self.gemini_config = gemini_config
+        self.prompt_config = prompt_config or {}
+        self.stream_off_channels = stream_off_channels or []
+        self.max_response_length = max_response_length
+        self.policy = policy or []
+        self.cronjobs = cronjobs or []
+        
+        self.scheduler = AsyncIOScheduler()
+        self.running_processes = {}  # map channel_id (str) to subprocess
+
+    @property
+    def cwd(self):
+        return self.gemini_config.get('workspace', '.')
+
+    async def start_cronjobs(self):
+        for job_config in self.cronjobs:
+            schedule = job_config.get("schedule")
+            prompt_file = job_config.get("prompt")
+            channel_id = job_config.get("channel_id")
+            mention_user_id = job_config.get("mention_user_id")
+            silent = job_config.get("silent", False)
+            probability = job_config.get("probability")
+            if schedule and prompt_file and (channel_id or silent):
+                if not os.path.exists(prompt_file):
+                    print(f"Warning: Cronjob prompt file not found at {prompt_file}. Skipping.")
+                    continue
+                try:
+                    self.scheduler.add_job(
+                        self.run_cronjob,
+                        CronTrigger.from_crontab(schedule),
+                        args=[prompt_file, channel_id, mention_user_id, silent, probability]
+                    )
+                    print(f"Added cronjob: {schedule} -> {prompt_file}, report channel: {channel_id}")
+                except Exception as e:
+                    print(f"Failed to add cronjob {job_config}: {e}")
+            else:
+                print(f"Warning: Cronjob skipped {job_config} (missing channel_id, schedule, or prompt file)")
+        self.scheduler.start()
+
+    async def run_cronjob(self, prompt_file, channel_id, mention_user_id=None, silent=False, probability=None):
+        if probability is not None:
+            try:
+                prob = float(probability)
+                if random.random() > prob:
+                    print(f"Cronjob {prompt_file} skipped due to probability ({prob})")
+                    return
+            except ValueError:
+                print(f"Cronjob Error: Invalid probability value {probability}")
+                
+        try:
+            if not os.path.exists(prompt_file):
+                print(f"Cronjob Error: Prompt file not found at {prompt_file}")
+                return
+
+            with open(prompt_file, "r") as f:
+                prompt = f.read().strip()
+            if not prompt:
+                print(f"Cronjob Error: Prompt file {prompt_file} is empty.")
+                return
+
+            if silent:
+                print(f"Cronjob triggered (silent): {prompt_file} scheduled running in background")
+                try:
+                    process, system_prompt_path = await self._execute_gemini_command(prompt, channel_id, str(self.bot.user.id), None)
+                    stdout, stderr = await process.communicate()
+                    if process.returncode != 0:
+                        print(f"Silent cronjob {prompt_file} failed: {stderr.decode().strip()}")
+                    else:
+                        print(f"Silent cronjob {prompt_file} completed successfully.")
+                    if system_prompt_path and os.path.exists(system_prompt_path):
+                        os.remove(system_prompt_path)
+                except Exception as e:
+                    print(f"Error executing silent cronjob {prompt_file}: {e}")
+                return
+
+            channel = self.bot.get_channel(int(channel_id))
+            if not channel:
+                try:
+                    channel = await self.bot.fetch_channel(int(channel_id))
+                except Exception:
+                    print(f"Cronjob Error: Could not fetch channel {channel_id}")
+                    return
+
+            if not channel:
+                print(f"Cronjob Error: Channel {channel_id} not found.")
+                return
+
+            if mention_user_id:
+                prompt = f"[mention:{mention_user_id}]{prompt}"
+
+            db.insert_message(channel_id, "0", str(self.bot.user.id), prompt)
+            print(f"Cronjob triggered: {prompt_file} scheduled running in channel {channel_id}")
+
+        except Exception as e:
+            print(f"Error running cronjob {prompt_file}: {e}")
+
+    def _is_stream_off(self, channel_id, channel=None):
+        stream_off = str(channel_id) in self.stream_off_channels
+        if channel and isinstance(channel, discord.Thread) and getattr(channel, 'parent_id', None):
+            stream_off = stream_off or (str(channel.parent_id) in self.stream_off_channels)
+        return stream_off
+
+    def _get_channel_users_str(self, channel):
+        user_list_str = ""
+        try:
+            members = []
+            if getattr(channel, 'type', None) == discord.ChannelType.private:
+                if hasattr(channel, 'recipient') and channel.recipient:
+                    members = [channel.recipient]
+            elif hasattr(channel, 'members') and not isinstance(channel, discord.Thread):
+                members = channel.members
+            elif hasattr(channel, 'parent') and hasattr(channel.parent, 'members'):
+                members = channel.parent.members
+            elif hasattr(channel, 'guild') and hasattr(channel.guild, 'members'):
+                members = channel.guild.members
+            
+            valid_members = [m for m in members if m.id != self.bot.user.id]
+            if valid_members:
+                user_lines = []
+                for m in valid_members[:5]:
+                    name = getattr(m, 'display_name', getattr(m, 'name', 'Unknown'))
+                    user_lines.append(f"  - {name} <@{m.id}>")
+                user_list_str = "Here are some users in this channel you can mention:\n" + "\n".join(user_lines) + "\n"
+        except Exception:
+            pass
+        return user_list_str
+
+    async def _execute_gemini_command(self, prompt, channel_id, author_id, channel, is_cronjob=False):
+        gemini_exec = self.gemini_config.get('executable_path', 'gemini')
+        args = [gemini_exec]
+        
+        is_yolo = self.gemini_config.get('yolo', False)
+        if prompt.startswith('-y '):
+            is_yolo = True
+            prompt = prompt[3:].strip()
+        if is_yolo:
+            args.append('-y')
+        elif self.gemini_config.get('sandbox') == True:
+            args.append('--sandbox')
+
+        for p in self.policy:
+            args.extend(['--policy', p])
+
+        thread_session = db.get_thread_session(channel_id)
+        if thread_session:
+            args.extend(['-r', thread_session])
+        
+        if self._is_stream_off(channel_id, channel) or is_cronjob:
+            args.extend(['-o', 'json'])
+        else:
+            args.extend(['-o', 'stream-json'])
+            
+        include_dirs = self.gemini_config.get('include_directories', [])
+        for inc_dir in include_dirs:
+            args.extend(['--include-directories', inc_dir])
+            
+        attachments_dir = self.gemini_config.get('attachments_dir', 'attachments')
+        if os.path.isabs(attachments_dir):
+            if attachments_dir not in include_dirs:
+                args.extend(['--include-directories', attachments_dir])
+
+        author = None
+        try:
+            author_id_int = int(author_id)
+            author = self.bot.get_user(author_id_int)
+            if not author:
+                author = await self.bot.fetch_user(author_id_int)
+        except Exception:
+            pass
+        author_name = f"{author.display_name} <@{author_id}>" if author else f"<@{author_id}>"
+
+        timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+        if author_id != str(self.bot.user.id):
+            prompt = (
+                f"{prompt}\n"
+                f"--- Message Above From {author_name} at {timestamp} ---\n"
+            )
+        args.extend(['-p', prompt])
+        
+        system_prompt_content = ""
+        
+        try:
+            import importlib.resources
+            content = importlib.resources.files("geminiclaw.resources").joinpath("system.md").read_text()
+            if content:
+                system_prompt_content += (
+                    f"---BEGIN SYSTEM PROMPT---\n"
+                    f"{content}\n"
+                    "---END SYSTEM PROMPT---\n\n"
+                )
+        except Exception as e:
+            print(f"Warning: Failed to read system prompt from resources: {e}")
+
+        if hasattr(self, 'prompt_config') and self.prompt_config:
+            user_paths = self.prompt_config.get("user")
+            if user_paths:
+                if isinstance(user_paths, str):
+                    user_paths = [user_paths]
+                for path in user_paths:
+                    full_path = path if os.path.isabs(path) else os.path.join(self.cwd, path)
+                    if os.path.exists(full_path):
+                        try:
+                            with open(full_path, "r") as f:
+                                content = f.read().strip()
+                            if content:
+                                filename = os.path.basename(path)
+                                system_prompt_content += (
+                                    f"---BEGIN {filename}---\n"
+                                    f"{content}\n"
+                                    f"---END {filename}---\n\n"
+                                )
+                        except Exception as e:
+                            print(f"Warning: Failed to read user prompt from {full_path}: {e}")
+        
+        user_list_str = self._get_channel_users_str(channel)
+
+        discord_instructions = (
+            "---BEGIN DISCORD INSTRUCTIONS---\n"
+            f"You are chatting with the user in a discord channel. (channel id: {channel_id})\n"
+            f"Your own discord user name and id is {self.bot.user.name} <@{self.bot.user.id}>.\n"
+            "If you want to send a file to the user as an attachment, "
+            "use the exact syntax: [attachment: path/to/file].\n"
+            "The bot will extract this tag and upload the file to Discord.\n"
+            f"{user_list_str}"
+            "When you need to mention a user, use the strict syntax with the integer user id: <@user_id>\n"
+            "---END DISCORD INSTRUCTIONS---\n\n"
+        )
+        system_prompt_content += discord_instructions
+
+        topic = None
+        if isinstance(channel, discord.Thread):
+            if hasattr(channel.parent, 'topic'):
+                topic = channel.parent.topic
+        elif isinstance(channel, discord.TextChannel):
+            topic = channel.topic
+        
+        if topic and topic.strip():
+            topic_instructions = (
+                f"---BEGIN TOPIC INSTRUCTIONS---\n"
+                f"{topic.strip()}\n"
+                f"---END TOPIC INSTRUCTIONS---\n\n"
+            )
+            system_prompt_content += topic_instructions
+        
+        system_prompt_path = f"/tmp/gemini_system_{channel_id}_{self.bot.user.id}.md"
+        with open(system_prompt_path, "w") as f:
+            f.write(system_prompt_content)
+            
+        env = os.environ.copy()
+        if 'api_key' in self.gemini_config:
+            env['GOOGLE_API_KEY'] = self.gemini_config['api_key']
+        if 'project' in self.gemini_config:
+            env['GOOGLE_CLOUD_PROJECT'] = self.gemini_config['project']
+        if 'location' in self.gemini_config:
+            env['GOOGLE_CLOUD_LOCATION'] = self.gemini_config['location']
+        if self.gemini_config.get('cli_home') is not None:
+            env['GEMINI_CLI_HOME'] = str(self.gemini_config['cli_home'])
+        env['GEMINI_SYSTEM_MD'] = system_prompt_path
+        if self.gemini_config.get('sandbox') == True:
+            env['SEATBELT_PROFILE'] = 'geminiclaw'
+
+        process = await asyncio.create_subprocess_exec(
+            *args,
+            stdin=subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            limit=OUTPUT_BUFFER_LIMIT,
+            cwd=self.cwd,
+            env=env,
+            start_new_session=True
+        )
+        return process, system_prompt_path
+
+    async def _get_gemini_output(self, process, channel, author_id, msg_id_db, timeout_seconds, is_cronjob=False, prompt="", mention_user_id=None):
+        final_response = ""
+        error = ""
+        
+        try:
+            async with channel.typing():
+                stdout_bytes, stderr_bytes = await asyncio.wait_for(process.communicate(), timeout=timeout_seconds)
+                output = stdout_bytes.decode().strip()
+                error = stderr_bytes.decode().strip()
+                
+                if output:
+                    try:
+                        parsed = json.loads(output)
+                        if isinstance(parsed, dict):
+                            response_text = parsed.get("response", "")
+                            if response_text:
+                                final_response = response_text
+                            
+                            if parsed.get("session_id"):
+                                db.set_thread_session(channel.id, parsed.get("session_id"))
+                    except json.JSONDecodeError:
+                        print("===json error", output)
+                        
+            if not final_response:
+                if isinstance(process.returncode, int) and process.returncode < 0:
+                    final_response = "Stopped by user."
+                elif error:
+                    final_response = f"Error: {error}"
+                else:
+                    final_response = "Gemini completed but returned no output."
+                    
+        except asyncio.TimeoutError:
+            try:
+                if isinstance(process.pid, int):
+                    os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            final_response = f"Error: Gemini command timed out after {timeout_seconds} seconds."
+
+        if NO_REPLY in final_response:
+            return NO_REPLY, channel
+        
+        match = re.search(r'\[to_channel:\s*(\d+)\]', final_response)
+        if match:
+            target_id = int(match.group(1))
+            target_channel = self.bot.get_channel(target_id)
+            if not target_channel:
+                try:
+                    target_channel = await self.bot.fetch_channel(target_id)
+                except Exception:
+                    pass
+            if target_channel:
+                print(f"Routing response to channel {target_id}")
+                channel = target_channel
+                final_response = final_response.replace(match.group(0), "").strip()
+
+        if is_cronjob and final_response:
+            if not isinstance(channel, discord.Thread) and not isinstance(channel, discord.DMChannel):
+                try:
+                    thread_name = await self.bot.generate_thread_summary(prompt if prompt else "Cronjob")
+                    thread = await channel.create_thread(name=thread_name, type=discord.ChannelType.public_thread)
+                    db.set_thread_active(thread.id, True)
+                    session_id = db.get_thread_session(channel.id)
+                    if session_id:
+                        db.set_thread_session(thread.id, session_id)
+                    print(f"Created thread {thread_name} ({thread.id}) for cronjob")
+                    await thread.send(f"<@{mention_user_id}>" if mention_user_id else "Executing cronjob...*")
+                    channel = thread
+                except Exception as e:
+                    print(f"Failed to create thread for cronjob: {e}")
+            else:
+                print(f"Cronjob output routed to existing thread or DM {channel.id}, sending execution message.")
+                await channel.send(f"<@{mention_user_id}>" if mention_user_id else "Executing cronjob...*")
+
+        if final_response:
+            clean_text = re.sub(r'\[attachment:\s*.*?\]', '', final_response)
+            if clean_text.strip():
+                lines = clean_text.splitlines(keepends=True)
+                chunk = ""
+                for line in lines:
+                    if len(chunk) + len(line) <= self.max_response_length:
+                        chunk += line
+                    else:
+                        if chunk.strip():
+                            await channel.send(chunk)
+                        
+                        residue = line
+                        while len(residue) > self.max_response_length:
+                            part = residue[:self.max_response_length]
+                            if part.strip():
+                                await channel.send(part)
+                            residue = residue[self.max_response_length:]
+                        chunk = residue
+                        
+                if chunk.strip():
+                    await channel.send(chunk)
+
+        return final_response, channel
+
+    async def _stream_gemini_output(self, process, channel, author_id, msg_id_db, timeout_seconds):
+        final_response = ""
+        sender = StreamSender(self.bot, channel)
+
+        async def read_stream():
+            nonlocal final_response
+            while True:
+                line = await asyncio.wait_for(process.stdout.readline(), timeout=timeout_seconds)
+                if not line:
+                    break
+                
+                line_str = line.decode().strip()
+                if not line_str:
+                    continue
+
+                try:
+                    parsed = json.loads(line_str)
+                    if parsed.get("type") == "message" and parsed.get("role") == "assistant":
+                        content = parsed.get("content", "")
+                        final_response += content
+                        await sender.send(content)
+                    elif parsed.get("type") == "result":
+                        print("===result", parsed)
+                    elif parsed.get("session_id"):
+                        db.set_thread_session(channel.id, parsed.get("session_id"))
+                except json.JSONDecodeError:
+                    print("===json error", line_str)
+
+        try:
+            async with channel.typing():
+                await read_stream()
+
+            await sender.flush()
+
+            await process.wait()
+            stderr_output = await process.stderr.read()
+            error = stderr_output.decode().strip()
+
+            if not final_response:
+                if isinstance(process.returncode, int) and process.returncode < 0:
+                    final_response = "Stopped by user."
+                elif error:
+                    final_response = f"Error: {error}"
+                    if sender.msg_to_edit:
+                        await sender.msg_to_edit.edit(content=final_response)
+                else:
+                    final_response = "Gemini completed but returned no output."
+
+        except asyncio.TimeoutError:
+            try:
+                if isinstance(process.pid, int):
+                    os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            final_response = f"Error: Gemini command timed out after {timeout_seconds} seconds."
+            if sender.msg_to_edit:
+                try:
+                    await sender.msg_to_edit.edit(content=final_response)
+                except:
+                    pass
+
+        if not sender.streamed and final_response:
+            await sender.send(final_response, flush=True)
+
+        return final_response
+
+    async def _handle_outbound_attachments(self, final_response, channel, cwd):
+        outbound_files = []
+        if final_response:
+            for match in re.finditer(r'\[attachment:\s*(.+?)\]', final_response):
+                path = match.group(1).strip()
+                full_path = os.path.abspath(os.path.normpath(os.path.join(cwd, path)))
+                if os.path.isfile(full_path):
+                    if full_path not in outbound_files:
+                        outbound_files.append(full_path)
+
+        if outbound_files:
+            for i in range(0, len(outbound_files), 10):
+                batch_paths = outbound_files[i:i+10]
+                discord_files = []
+                for path in batch_paths:
+                    try:
+                        discord_files.append(discord.File(path))
+                    except Exception as e:
+                        print(f"Error preparing file {path}: {e}")
+                
+                if discord_files:
+                    try:
+                        await channel.send("", files=discord_files)
+                    except Exception as e:
+                        print(f"Error sending files: {e}")
+                        await channel.send(f"Failed to send some attachments: {e}")
+
+    async def process_single_message(self, row):
+        msg_id_db = row['id']
+        channel_id = int(row['channel_id'])
+        prompt = row['prompt']
+        author_id = row['author_id']
+        attachments_json = row['attachments'] if 'attachments' in row.keys() else None
+
+        mention_user_id = None
+        if prompt.startswith("[mention:"):
+            match = re.search(r'\[mention:(\d+)\]', prompt)
+            if match:
+                mention_user_id = match.group(1)
+                prompt = prompt[match.end():].strip()
+
+        print(f"====Processing message {msg_id_db} from {author_id}: {prompt[:120]} (first 120 chars)\nattachments: {attachments_json}\n====")
+        
+        attachments = []
+        if attachments_json:
+            try:
+                attachments = json.loads(attachments_json)
+            except Exception:
+                pass
+
+        if attachments:
+            if not prompt:
+                prompt = ""
+            prompt += "\n\nAttachments:"
+            for attach in attachments:
+                prompt += f"\n- {attach}"
+        
+        channel = self.bot.get_channel(channel_id)
+        if not channel:
+            try:
+                channel = await self.bot.fetch_channel(channel_id)
+            except Exception:
+                print(f"Could not fetch channel {channel_id}, skipping message.")
+                db.update_message_status(msg_id_db, 'failed', 'Channel not found or deleted')
+                self.running_processes.pop(str(row['channel_id']), None)
+                return
+
+        system_prompt_path = None
+        try:
+            is_cronjob = str(dict(row).get('message_id', '')) == "0"
+            process, system_prompt_path = await self._execute_gemini_command(prompt, row['channel_id'], author_id, channel, is_cronjob=is_cronjob)
+            self.running_processes[str(row['channel_id'])] = process
+
+            print(f"====system prompt file for message {msg_id_db} created: {system_prompt_path}")
+            
+            timeout_seconds = self.gemini_config.get('timeout', 600)
+            
+            if self._is_stream_off(row['channel_id'], channel) or is_cronjob:
+                final_response, channel = await self._get_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds, is_cronjob=is_cronjob, prompt=prompt, mention_user_id=mention_user_id)
+            else:
+                final_response = await self._stream_gemini_output(process, channel, author_id, msg_id_db, timeout_seconds)
+
+            db.update_message_status(msg_id_db, 'completed', final_response)
+
+            if final_response == NO_REPLY:
+                print(f"===Skipped reply for message {msg_id_db} prompt: {prompt[:120]}\n===")
+                return
+
+            await self._handle_outbound_attachments(final_response, channel, self.cwd)
+
+            if isinstance(channel, discord.Thread) and db.get_message_count(channel.id) <= 4:
+                summary = await self.bot.generate_thread_summary(final_response)
+                if summary and summary != channel.name:
+                    try:
+                        await channel.edit(name=summary)
+                        print(f"Updated thread name to: {summary}")
+                    except Exception as e:
+                        print(f"Failed to update thread name: {e}")
+
+            db.update_message_status(msg_id_db, 'delivered')
+
+        except Exception as e:
+            print(f"Error processing message {msg_id_db}: {e}")
+            db.update_message_status(msg_id_db, 'failed', str(e))
+        finally:
+            self.running_processes.pop(str(row['channel_id']), None)
+            if system_prompt_path and os.path.exists(system_prompt_path):
+                try:
+                    os.remove(system_prompt_path)
+                    print(f"Cleaned up system prompt file: {system_prompt_path}")
+                except Exception as e:
+                    print(f"Failed to remove temp system prompt file {system_prompt_path}: {e}")
+
+    async def process_pending_messages_loop(self):
+        while True:
+            try:
+                busy_threads = list(self.running_processes.keys())
+                row = db.get_next_processable_message(busy_threads)
+                if not row:
+                    await asyncio.sleep(5)
+                    continue
+
+                msg_id_db = row['id']
+                db.update_message_status(msg_id_db, 'processing')
+                self.running_processes[str(row['channel_id'])] = None
+                
+                asyncio.create_task(self.process_single_message(row))
+            except Exception as e:
+                print(f"Error in process_pending_messages loop: {e}")
+                await asyncio.sleep(5)
