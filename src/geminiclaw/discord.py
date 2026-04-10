@@ -410,6 +410,11 @@ class DiscordBot(commands.Bot):
                 logger.error(f"Failed to run restart command: {e}")
             return
 
+        if len(message.content.strip()) == 0:
+            # empty message can happen with new thread created by someone else
+            logger.info(f"Skipped empty message from {message.author}")
+            return
+
         if is_thread and db.has_thread(message.channel.id) and not db.is_thread_active(message.channel.id):
             logger.info("Thread is deactivated. Ignoring all message until -continue.")
             return
@@ -441,18 +446,21 @@ class DiscordBot(commands.Bot):
                 else:
                     logger.info('Replying to an active thread')
                     should_reply = True
-            elif not db.has_thread(message.channel.id):
-                try:
-                    starter_msg = await message.channel.parent.fetch_message(message.channel.id)
-                    if self.is_bot_mentioned(starter_msg):
-                        logger.info(f'Recovering thread state for thread {message.channel.id}')
-                        is_new_thread_participant = True
-                        db.set_thread_active(message.channel.id, True)
-                        should_reply = True
-                except Exception as e:
-                    logger.error(f"Error fetching starter message: {e}")
             else:
-                logger.info("Thread inactive, stop replying.")
+                if not db.has_thread(message.channel.id):
+                    try:
+                        starter_msg = await message.channel.parent.fetch_message(message.channel.id)
+                        if self.is_bot_mentioned(starter_msg):
+                            # the thread could be created while awaiting. so check again.
+                            if not db.has_thread(message.channel.id):
+                                logger.info(f'Recovering thread state for thread {message.channel.id}')
+                                is_new_thread_participant = True
+                                db.set_thread_active(message.channel.id, True)
+                                should_reply = True
+                    except Exception as e:
+                        logger.error(f"Error fetching starter message: {e}")
+                else:
+                    logger.info("Thread inactive, stop replying.")
 
         if not should_reply:
             return
@@ -461,9 +469,7 @@ class DiscordBot(commands.Bot):
         for user in message.mentions:
             prompt = (
                 prompt
-                .replace(f'<@{user.id}>', f'@{user.display_name}')
-                .replace(f'<@&{user.id}>', f'@{user.display_name}')
-                .replace(f'<@!{user.id}>', f'@{user.display_name}')
+                .replace(f'<@{user.id}>', f'<@{user.id}>({user.display_name})')
             )
         prompt = prompt.strip()
 

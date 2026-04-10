@@ -13,7 +13,7 @@ class ColorFormatter(logging.Formatter):
     }
 
     def __init__(self):
-        super().__init__("%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s")
+        super().__init__("%(asctime)s - [PID:%(process)d|T:%(thread)d] - %(filename)s:%(lineno)d - %(levelname)s - %(message)s")
 
     def formatTime(self, record, datefmt=None):
         time_str = super().formatTime(record, datefmt)
