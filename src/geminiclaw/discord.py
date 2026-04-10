@@ -29,7 +29,6 @@ class StreamSender:
         self.streamed = False
 
     async def send(self, text=None, flush=False):
-        logger.error(f"sending text to channel {self.channel.id}")
         if text is not None:
             self.current_chunk += text
             
@@ -228,6 +227,21 @@ class DiscordBot(commands.Bot):
         async def noop():
             yield
         return noop()
+
+    @property
+    def user_id(self) -> str:
+        return str(self.user.id) if self.user else ""
+
+    async def get_author_name(self, author_id: str) -> str:
+        author = None
+        try:
+            author_id_int = int(author_id)
+            author = self.get_user(author_id_int)
+            if not author:
+                author = await self.fetch_user(author_id_int)
+        except Exception:
+            pass
+        return f"{author.display_name} <@{author_id}>" if author else f"<@{author_id}>"
 
     async def get_system_instructions(self, channel_id: str) -> str:
         user_list_str = await self.get_channel_users_str(channel_id)

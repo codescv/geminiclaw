@@ -124,7 +124,7 @@ class Agent:
             if silent:
                 logger.info(f"Cronjob triggered (silent): {prompt_file} scheduled running in background")
                 try:
-                    process, system_prompt_path = await self._execute_gemini_command(prompt, channel_id, str(self.bot.user.id), None)
+                    process, system_prompt_path = await self._execute_gemini_command(prompt, channel_id, self.bot.user_id, None)
                     stdout, stderr = await process.communicate()
                     if process.returncode != 0:
                         logger.error(f"Silent cronjob {prompt_file} failed: {stderr.decode().strip()}")
@@ -151,7 +151,7 @@ class Agent:
             if mention_user_id:
                 prompt = f"[mention:{mention_user_id}]{prompt}"
 
-            db.insert_message(channel_id, "0", str(self.bot.user.id), prompt)
+            db.insert_message(channel_id, "0", self.bot.user_id, prompt)
             logger.info(f"Cronjob triggered: {prompt_file} scheduled running in channel {channel_id}")
 
         except Exception as e:
@@ -196,18 +196,10 @@ class Agent:
             if attachments_dir not in include_dirs:
                 args.extend(['--include-directories', attachments_dir])
 
-        author = None
-        try:
-            author_id_int = int(author_id)
-            author = self.bot.get_user(author_id_int)
-            if not author:
-                author = await self.bot.fetch_user(author_id_int)
-        except Exception:
-            pass
-        author_name = f"{author.display_name} <@{author_id}>" if author else f"<@{author_id}>"
-
+        author_name = await self.bot.get_author_name(author_id)
         timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
-        if author_id != str(self.bot.user.id):
+        if author_id != self.bot.user_id:
+            # Cronjobs will have a message with the bot user id, and we don't append anything
             prompt = (
                 f"{prompt}\n"
                 f"--- Message Above From {author_name} at {timestamp} ---\n"
@@ -251,7 +243,7 @@ class Agent:
         
         system_prompt_content += await self.bot.get_system_instructions(channel_id)
 
-        system_prompt_path = f"/tmp/gemini_system_{channel_id}_{self.bot.user.id}.md"
+        system_prompt_path = f"/tmp/gemini_system_{channel_id}_{self.bot.user_id}.md"
         with open(system_prompt_path, "w") as f:
             f.write(system_prompt_content)
             
