@@ -30,7 +30,6 @@ class Agent:
         bot,
         gemini_config: dict,
         prompt_config: dict = None,
-        stream_off_channels: list = None,
         max_response_length: int = 1900,
         policy: list = None,
         cronjobs: list = None):
@@ -41,7 +40,6 @@ class Agent:
             bot: The running chat bot instance.
             gemini_config: Configuration mapping for the Gemini CLI (e.g., timeout, workspace).
             prompt_config: Paths to prompt templates.
-            stream_off_channels: List of channel IDs where streaming is disabled.
             max_response_length: Maximum output length before message pagination.
             policy: A list of policy definitions to pass to the Gemini CLI.
             cronjobs: Scheduled messaging jobs configurations.
@@ -49,7 +47,6 @@ class Agent:
         self.bot = bot
         self.gemini_config = gemini_config
         self.prompt_config = prompt_config or {}
-        self.stream_off_channels = stream_off_channels or []
         self.max_response_length = max_response_length
         self.policy = policy or []
         self.cronjobs = cronjobs or []
@@ -454,7 +451,7 @@ class Agent:
                 mention_user_id = match.group(1)
                 prompt = prompt[match.end():].strip()
 
-        logger.info(f"Processing message {msg_id_db} from {author_id}: {prompt[:120]} (first 120 chars)\nattachments: {attachments_json}\n=")
+        logger.info(f"Processing message {msg_id_db} from {author_id}:(first 120 chars)\n{prompt[:120]}\nattachments: {attachments_json}\n")
         
         attachments = []
         if attachments_json:

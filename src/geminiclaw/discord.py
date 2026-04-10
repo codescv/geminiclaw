@@ -98,6 +98,7 @@ class DiscordBot(commands.Bot):
         self.gemini_config = gemini_config
         self.always_reply = always_reply or []
         self.max_response_length = max_response_length
+        self.stream_off_channels = stream_off_channels or []
         self.agent = None  # Will be set by main()
         self._active_streams = {}
 
