@@ -6,10 +6,38 @@ import subprocess
 import time
 import re
 import random
+import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from . import db
+
+class ColorFormatter(logging.Formatter):
+    BOLD = "\033[1m"
+    RESET = "\033[0m"
+    CYAN = "\033[36m"
+    COLORS = {
+        logging.DEBUG: "\033[34m",
+        logging.INFO: "\033[32m",
+        logging.WARNING: "\033[33m",
+        logging.ERROR: "\033[31m",
+        logging.CRITICAL: "\033[35m",
+    }
+
+    def format(self, record):
+        level_color = self.COLORS.get(record.levelno, self.RESET)
+        time_str = self.formatTime(record)
+        msg = record.getMessage()
+        level_str = f"{self.BOLD}{level_color}{record.levelname}{self.RESET}"
+        time_fmt = f"{self.BOLD}{self.CYAN}{time_str}{self.RESET}"
+        return f"{time_fmt} - {record.filename}:{record.lineno} - {level_str} - {msg}"
+
+handler = logging.StreamHandler()
+handler.setFormatter(ColorFormatter())
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    logger.addHandler(handler)
 
 OUTPUT_BUFFER_LIMIT = 2 ** 20  # 1MB
 NO_REPLY = "NO_REPLY"
@@ -69,7 +97,7 @@ class Agent:
             probability = job_config.get("probability")
             if schedule and prompt_file and (channel_id or silent):
                 if not os.path.exists(prompt_file):
-                    print(f"Warning: Cronjob prompt file not found at {prompt_file}. Skipping.")
+                    logger.warning(f"Cronjob prompt file not found at {prompt_file}. Skipping.")
                     continue
                 try:
                     self.scheduler.add_job(
@@ -77,11 +105,11 @@ class Agent:
                         CronTrigger.from_crontab(schedule),
                         args=[prompt_file, channel_id, mention_user_id, silent, probability]
                     )
-                    print(f"Added cronjob: {schedule} -> {prompt_file}, report channel: {channel_id}")
+                    logger.info(f"Added cronjob: {schedule} -> {prompt_file}, report channel: {channel_id}")
                 except Exception as e:
-                    print(f"Failed to add cronjob {job_config}: {e}")
+                    logger.exception(f"Failed to add cronjob {job_config}: {e}")
             else:
-                print(f"Warning: Cronjob skipped {job_config} (missing channel_id, schedule, or prompt file)")
+                logger.warning(f"Cronjob skipped {job_config} (missing channel_id, schedule, or prompt file)")
         self.scheduler.start()
 
     async def run_cronjob(
@@ -104,35 +132,35 @@ class Agent:
             try:
                 prob = float(probability)
                 if random.random() > prob:
-                    print(f"Cronjob {prompt_file} skipped due to probability ({prob})")
+                    logger.info(f"Cronjob {prompt_file} skipped due to probability ({prob})")
                     return
             except ValueError:
-                print(f"Cronjob Error: Invalid probability value {probability}")
+                logger.exception(f"Cronjob Error: Invalid probability value {probability}")
                 
         try:
             if not os.path.exists(prompt_file):
-                print(f"Cronjob Error: Prompt file not found at {prompt_file}")
+                logger.error(f"Cronjob Error: Prompt file not found at {prompt_file}")
                 return
 
             with open(prompt_file, "r") as f:
                 prompt = f.read().strip()
             if not prompt:
-                print(f"Cronjob Error: Prompt file {prompt_file} is empty.")
+                logger.error(f"Cronjob Error: Prompt file {prompt_file} is empty.")
                 return
 
             if silent:
-                print(f"Cronjob triggered (silent): {prompt_file} scheduled running in background")
+                logger.info(f"Cronjob triggered (silent): {prompt_file} scheduled running in background")
                 try:
                     process, system_prompt_path = await self._execute_gemini_command(prompt, channel_id, str(self.bot.user.id), None)
                     stdout, stderr = await process.communicate()
                     if process.returncode != 0:
-                        print(f"Silent cronjob {prompt_file} failed: {stderr.decode().strip()}")
+                        logger.error(f"Silent cronjob {prompt_file} failed: {stderr.decode().strip()}")
                     else:
-                        print(f"Silent cronjob {prompt_file} completed successfully.")
+                        logger.info(f"Silent cronjob {prompt_file} completed successfully.")
                     if system_prompt_path and os.path.exists(system_prompt_path):
                         os.remove(system_prompt_path)
                 except Exception as e:
-                    print(f"Error executing silent cronjob {prompt_file}: {e}")
+                    logger.exception(f"Error executing silent cronjob {prompt_file}: {e}")
                 return
 
             channel = self.bot.get_channel(int(channel_id))
@@ -140,21 +168,21 @@ class Agent:
                 try:
                     channel = await self.bot.fetch_channel(int(channel_id))
                 except Exception:
-                    print(f"Cronjob Error: Could not fetch channel {channel_id}")
+                    logger.exception(f"Cronjob Error: Could not fetch channel {channel_id}")
                     return
 
             if not channel:
-                print(f"Cronjob Error: Channel {channel_id} not found.")
+                logger.error(f"Cronjob Error: Channel {channel_id} not found.")
                 return
 
             if mention_user_id:
                 prompt = f"[mention:{mention_user_id}]{prompt}"
 
             db.insert_message(channel_id, "0", str(self.bot.user.id), prompt)
-            print(f"Cronjob triggered: {prompt_file} scheduled running in channel {channel_id}")
+            logger.info(f"Cronjob triggered: {prompt_file} scheduled running in channel {channel_id}")
 
         except Exception as e:
-            print(f"Error running cronjob {prompt_file}: {e}")
+            logger.exception(f"Error running cronjob {prompt_file}: {e}")
 
     async def _execute_gemini_command(
         self, prompt: str,
@@ -225,7 +253,7 @@ class Agent:
                     "---END SYSTEM PROMPT---\n\n"
                 )
         except Exception as e:
-            print(f"Warning: Failed to read system prompt from resources: {e}")
+            logger.warning(f"Failed to read system prompt from resources: {e}")
 
         if hasattr(self, 'prompt_config') and self.prompt_config:
             user_paths = self.prompt_config.get("user")
@@ -246,7 +274,7 @@ class Agent:
                                     f"---END {filename}---\n\n"
                                 )
                         except Exception as e:
-                            print(f"Warning: Failed to read user prompt from {full_path}: {e}")
+                            logger.warning(f"Failed to read user prompt from {full_path}: {e}")
         
         system_prompt_content += await self.bot.get_system_instructions(channel_id)
 
@@ -301,7 +329,7 @@ class Agent:
                             if parsed.get("session_id"):
                                 db.set_thread_session(channel_id, parsed.get("session_id"))
                     except json.JSONDecodeError:
-                        print("===json error", output)
+                        logger.exception(f"json error: {output}")
                         
             if not final_response:
                 if isinstance(process.returncode, int) and process.returncode < 0:
@@ -381,11 +409,11 @@ class Agent:
                         final_response += content
                         await self.bot.stream_send(channel_id, content)
                     elif parsed.get("type") == "result":
-                        print("===result", parsed)
+                        logger.info(f"result: {parsed}")
                     elif parsed.get("session_id"):
                         db.set_thread_session(channel_id, parsed.get("session_id"))
                 except json.JSONDecodeError:
-                    print("===json error", line_str)
+                    logger.exception(f"json error: {line_str}")
 
         error = None
         try:
@@ -450,7 +478,7 @@ class Agent:
                 mention_user_id = match.group(1)
                 prompt = prompt[match.end():].strip()
 
-        print(f"====Processing message {msg_id_db} from {author_id}: {prompt[:120]} (first 120 chars)\nattachments: {attachments_json}\n====")
+        logger.info(f"Processing message {msg_id_db} from {author_id}: {prompt[:120]} (first 120 chars)\nattachments: {attachments_json}\n=")
         
         attachments = []
         if attachments_json:
@@ -467,7 +495,7 @@ class Agent:
                 prompt += f"\n- {attach}"
         
         if not await self.bot.channel_exists(str(channel_id)):
-            print(f"Could not fetch channel {channel_id}, skipping message.")
+            logger.warning(f"Could not fetch channel {channel_id}, skipping message.")
             db.update_message_status(msg_id_db, 'failed', 'Channel not found or deleted')
             self.running_processes.pop(str(row['channel_id']), None)
             return
@@ -478,7 +506,7 @@ class Agent:
             process, system_prompt_path = await self._execute_gemini_command(prompt, str(channel_id), author_id, is_cronjob=is_cronjob)
             self.running_processes[str(row['channel_id'])] = process
 
-            print(f"====system prompt file for message {msg_id_db} created: {system_prompt_path}")
+            logger.info(f"system prompt file for message {msg_id_db} created: {system_prompt_path}")
             
             timeout_seconds = self.gemini_config.get('timeout', 600)
             
@@ -494,7 +522,7 @@ class Agent:
             db.update_message_status(msg_id_db, 'completed', final_response)
 
             if final_response == NO_REPLY:
-                print(f"===Skipped reply for message {msg_id_db} prompt: {prompt[:120]}\n===")
+                logger.info(f"Skipped reply for message {msg_id_db} prompt: {prompt[:120]}\n")
                 return
 
             await self._handle_outbound_attachments(final_response, actual_channel_id, self.cwd)
@@ -503,16 +531,16 @@ class Agent:
             db.update_message_status(msg_id_db, 'delivered')
 
         except Exception as e:
-            print(f"Error processing message {msg_id_db}: {e}")
+            logger.exception(f"Error processing message {msg_id_db}")
             db.update_message_status(msg_id_db, 'failed', str(e))
         finally:
             self.running_processes.pop(str(row['channel_id']), None)
             if system_prompt_path and os.path.exists(system_prompt_path):
                 try:
                     os.remove(system_prompt_path)
-                    print(f"Cleaned up system prompt file: {system_prompt_path}")
+                    logger.info(f"Cleaned up system prompt file: {system_prompt_path}")
                 except Exception as e:
-                    print(f"Failed to remove temp system prompt file {system_prompt_path}: {e}")
+                    logger.exception(f"Failed to remove temp system prompt file {system_prompt_path}: {e}")
 
     async def process_pending_messages_loop(self):
         """Listen to the polling layer for pending tasks and trigger concurrent handlers."""
@@ -530,5 +558,5 @@ class Agent:
                 
                 asyncio.create_task(self.process_single_message(row))
             except Exception as e:
-                print(f"Error in process_pending_messages loop: {e}")
+                logger.exception(f"Error in process_pending_messages loop: {e}")
                 await asyncio.sleep(5)

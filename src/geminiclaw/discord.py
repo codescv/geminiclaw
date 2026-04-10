@@ -114,11 +114,10 @@ class DiscordBot(commands.Bot):
             stream_off = stream_off or (str(channel.parent_id) in self.stream_off_channels)
         return stream_off
 
-    async def stream_start(self, channel_id: str, channel=None):
+    async def stream_start(self, channel_id: str):
+        channel = self.get_channel(int(channel_id))
         if not channel:
-            channel = self.get_channel(int(channel_id))
-            if not channel:
-                channel = await self.fetch_channel(int(channel_id))
+            channel = await self.fetch_channel(int(channel_id))
         sender = StreamSender(self, channel)
         self._active_streams[str(channel_id)] = sender
 
