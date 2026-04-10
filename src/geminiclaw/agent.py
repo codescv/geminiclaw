@@ -11,33 +11,9 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from . import db
+from . import utils
 
-class ColorFormatter(logging.Formatter):
-    BOLD = "\033[1m"
-    RESET = "\033[0m"
-    CYAN = "\033[36m"
-    COLORS = {
-        logging.DEBUG: "\033[34m",
-        logging.INFO: "\033[32m",
-        logging.WARNING: "\033[33m",
-        logging.ERROR: "\033[31m",
-        logging.CRITICAL: "\033[35m",
-    }
-
-    def format(self, record):
-        level_color = self.COLORS.get(record.levelno, self.RESET)
-        time_str = self.formatTime(record)
-        msg = record.getMessage()
-        level_str = f"{self.BOLD}{level_color}{record.levelname}{self.RESET}"
-        time_fmt = f"{self.BOLD}{self.CYAN}{time_str}{self.RESET}"
-        return f"{time_fmt} - {record.filename}:{record.lineno} - {level_str} - {msg}"
-
-handler = logging.StreamHandler()
-handler.setFormatter(ColorFormatter())
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-if not logger.handlers:
-    logger.addHandler(handler)
+logger = utils.setup_logger(__name__)
 
 OUTPUT_BUFFER_LIMIT = 2 ** 20  # 1MB
 NO_REPLY = "NO_REPLY"
