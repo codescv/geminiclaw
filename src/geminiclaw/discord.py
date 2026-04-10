@@ -6,6 +6,9 @@ import discord
 from discord.ext import commands
 
 from . import db
+from . import utils
+
+logger = utils.setup_logger(__name__)
 
 class StreamSender:
     def _clean_message(self, text):
@@ -334,7 +337,7 @@ class DiscordBot(commands.Bot):
         is_dm = isinstance(message.channel, discord.DMChannel)
         is_bot_mentioned = self.user.mentioned_in(message)
 
-        print(f"===Received Message: {message.content[:120]} (first 120 chars)\nfrom {message.author}\n"
+        logger.info(f"Received Message: (first 120 chars)\n{message.content[:120]}\nfrom {message.author}\n"
               f"is_thread: {is_thread}\n is_dm: {is_dm}\n is_bot_mentioned: {is_bot_mentioned}")
 
         if message.content.strip().lower() == "-stop":
@@ -360,7 +363,7 @@ class DiscordBot(commands.Bot):
             if self.agent and chan_id_str in self.agent.running_processes:
                 process = self.agent.running_processes[chan_id_str]
                 if process:
-                    print(f'killing process: {process.pid} for channel {chan_id_str}')
+                    logger.info(f'killing process: {process.pid} for channel {chan_id_str}')
                     try:
                         os.killpg(process.pid, signal.SIGKILL)
                     except ProcessLookupError:
@@ -370,9 +373,9 @@ class DiscordBot(commands.Bot):
                     except Exception:
                         pass
                 else:
-                    print(f"Can't find the process to kill. Channel Id: {chan_id_str}")
+                    logger.warning(f"Can't find the process to kill. Channel Id: {chan_id_str}")
             else:
-                print(f"Can't find the process to kill. Channel Id: {chan_id_str}")
+                logger.warning(f"Can't find the process to kill. Channel Id: {chan_id_str}")
             return
 
         if message.content.strip().lower() == "-restart":
@@ -386,11 +389,11 @@ class DiscordBot(commands.Bot):
                     self.service_name
                 ], start_new_session=True)
             except Exception as e:
-                print(f"Failed to run restart command: {e}")
+                logger.error(f"Failed to run restart command: {e}")
             return
 
         if is_thread and db.has_thread(message.channel.id) and not db.is_thread_active(message.channel.id):
-            print("Thread is deactivated. Ignoring all message until -continue.")
+            logger.info("Thread is deactivated. Ignoring all message until -continue.")
             return
 
         should_reply = False
@@ -402,7 +405,7 @@ class DiscordBot(commands.Bot):
                 is_always_reply = True
 
         if is_bot_mentioned or is_dm or is_always_reply:
-            print('Replying to a message (mention, DM, or always_reply)')
+            logger.info('Replying to a message (mention, DM, or always_reply)')
             should_reply = True
             if is_thread:
                 if not db.has_thread(message.channel.id):
@@ -411,22 +414,22 @@ class DiscordBot(commands.Bot):
         elif is_thread:
             if db.is_thread_active(message.channel.id):
                 if message.mentions:
-                    print('Skpping message explicitly mentioning others in active thread')
+                    logger.info('Skpping message explicitly mentioning others in active thread')
                 else:
-                    print('Replying to an active thread')
+                    logger.info('Replying to an active thread')
                     should_reply = True
             elif not db.has_thread(message.channel.id):
                 try:
                     starter_msg = await message.channel.parent.fetch_message(message.channel.id)
                     if self.user.mentioned_in(starter_msg):
-                        print(f'Recovering thread state for thread {message.channel.id}')
+                        logger.info(f'Recovering thread state for thread {message.channel.id}')
                         is_new_thread_participant = True
                         db.set_thread_active(message.channel.id, True)
                         should_reply = True
                 except Exception as e:
-                    print(f"Error fetching starter message: {e}")
+                    logger.error(f"Error fetching starter message: {e}")
             else:
-                print("Thread inactive, stop replying.")
+                logger.info("Thread inactive, stop replying.")
 
         if not should_reply:
             return
@@ -437,7 +440,7 @@ class DiscordBot(commands.Bot):
         prompt = prompt.strip()
 
         if is_new_thread_participant:
-            print(f"Fetching history for newly joined thread {message.channel.id}")
+            logger.info(f"Fetching history for newly joined thread {message.channel.id}")
             history_text = ""
             try:
                 async for msg in message.channel.history(limit=20, before=message):
@@ -459,7 +462,7 @@ class DiscordBot(commands.Bot):
                 if history_text:
                     prompt = f"[Previous Context]\n{history_text.strip()}\n\n[Current Message]\n{prompt}"
             except Exception as e:
-                print(f"Error fetching history: {e}")
+                logger.error(f"Error fetching history: {e}")
         
         if not prompt and not message.attachments:
             return
@@ -472,9 +475,9 @@ class DiscordBot(commands.Bot):
                 thread = await message.create_thread(name=thread_name)
                 target_channel_id = thread.id
                 db.set_thread_active(thread.id, True)
-                print(f"Created thread {thread_name} ({thread.id})")
+                logger.info(f"Created thread {thread_name} ({thread.id})")
             except Exception as e:
-                print(f"Failed to create thread: {e} thread name: {thread_name}")
+                logger.error(f"Failed to create thread: {e} thread name: {thread_name}")
                 try:
                     existing_thread = message.channel.get_thread(message.id)
                     if not existing_thread and message.guild:
@@ -483,12 +486,12 @@ class DiscordBot(commands.Bot):
                     if existing_thread:
                         target_channel_id = existing_thread.id
                         db.set_thread_active(target_channel_id, True)
-                        print(f"Joined existing thread ({target_channel_id})")
+                        logger.info(f"Joined existing thread ({target_channel_id})")
                     else:
-                        print("Thread error.")
+                        logger.error("Thread error.")
                         return
                 except Exception as fetch_error:
-                    print(f"Failed to fetch existing thread: {fetch_error}")
+                    logger.error(f"Failed to fetch existing thread: {fetch_error}")
                     return
 
         attachments_paths = []
@@ -509,9 +512,9 @@ class DiscordBot(commands.Bot):
                     else:
                         rel_path = filepath
                     attachments_paths.append(rel_path)
-                print(f"Downloaded {len(attachments_paths)} attachments to {attachments_dir}")
+                logger.info(f"Downloaded {len(attachments_paths)} attachments to {attachments_dir}")
             except Exception as e:
-                print(f"Failed to download attachments: {e}")
+                logger.error(f"Failed to download attachments: {e}")
 
         import json
         attachments_json = json.dumps(attachments_paths) if attachments_paths else None
