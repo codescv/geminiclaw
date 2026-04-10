@@ -17,7 +17,26 @@ OUTPUT_BUFFER_LIMIT = 2 ** 20  # 1MB
 NO_REPLY = "NO_REPLY"
 
 class Agent:
-    def __init__(self, bot, gemini_config, prompt_config=None, stream_off_channels=None, max_response_length=1900, policy=None, cronjobs=None):
+    """
+    The primary Agent class that bridges the Discord interface with the Gemini CLI.
+    
+    It manages subprocess execution, cron-based scheduled tasks, message stream mapping,
+    and routing logic for multi-bot interactions.
+    """
+
+    def __init__(self, bot, gemini_config: dict, prompt_config: dict = None, stream_off_channels: list = None, max_response_length: int = 1900, policy: list = None, cronjobs: list = None):
+        """
+        Initialize the Agent with bot capabilities and configurations.
+
+        Args:
+            bot: The running discord bot instance.
+            gemini_config: Configuration mapping for the Gemini CLI (e.g., timeout, workspace).
+            prompt_config: Paths to prompt templates.
+            stream_off_channels: List of channel IDs where streaming is disabled.
+            max_response_length: Maximum output length before message pagination.
+            policy: A list of policy definitions to pass to the Gemini CLI.
+            cronjobs: Scheduled messaging jobs configurations.
+        """
         self.bot = bot
         self.gemini_config = gemini_config
         self.prompt_config = prompt_config or {}
@@ -30,10 +49,12 @@ class Agent:
         self.running_processes = {}  # map channel_id (str) to subprocess
 
     @property
-    def cwd(self):
+    def cwd(self) -> str:
+        """Get the working directory for Gemini execution."""
         return self.gemini_config.get('workspace', '.')
 
     async def start_cronjobs(self):
+        """Start the apscheduler context and configure background cron tasks."""
         for job_config in self.cronjobs:
             schedule = job_config.get("schedule")
             prompt_file = job_config.get("prompt")
@@ -58,7 +79,17 @@ class Agent:
                 print(f"Warning: Cronjob skipped {job_config} (missing channel_id, schedule, or prompt file)")
         self.scheduler.start()
 
-    async def run_cronjob(self, prompt_file, channel_id, mention_user_id=None, silent=False, probability=None):
+    async def run_cronjob(self, prompt_file: str, channel_id, mention_user_id=None, silent: bool = False, probability=None):
+        """
+        Execute a configured cronjob, running the underlying Gemini CLI process.
+
+        Args:
+            prompt_file: The path to the prompt context file.
+            channel_id: Target channel where output is sent (if not silent).
+            mention_user_id: Use the tag [mention:<id>] to ping the user in discord.
+            silent: If True, runs the CLI process strictly in the background without messaging discord.
+            probability: Float representing the chance (0.0 to 1.0) that the cronjob runs.
+        """
         if probability is not None:
             try:
                 prob = float(probability)
@@ -115,13 +146,15 @@ class Agent:
         except Exception as e:
             print(f"Error running cronjob {prompt_file}: {e}")
 
-    def _is_stream_off(self, channel_id, channel=None):
+    def _is_stream_off(self, channel_id, channel=None) -> bool:
+        """Determine whether the streaming capability is disabled for a channel or its parent."""
         stream_off = str(channel_id) in self.stream_off_channels
         if channel and isinstance(channel, discord.Thread) and getattr(channel, 'parent_id', None):
             stream_off = stream_off or (str(channel.parent_id) in self.stream_off_channels)
         return stream_off
 
-    def _get_channel_users_str(self, channel):
+    def _get_channel_users_str(self, channel) -> str:
+        """Retrieve the channel members and generate a formatted system prompt snippet."""
         user_list_str = ""
         try:
             members = []
@@ -146,7 +179,8 @@ class Agent:
             pass
         return user_list_str
 
-    async def _execute_gemini_command(self, prompt, channel_id, author_id, channel, is_cronjob=False):
+    async def _execute_gemini_command(self, prompt: str, channel_id, author_id, channel, is_cronjob: bool = False):
+        """Construct and invoke the Gemini CLI subprocess for a given prompt context."""
         gemini_exec = self.gemini_config.get('executable_path', 'gemini')
         args = [gemini_exec]
         
@@ -292,7 +326,8 @@ class Agent:
         )
         return process, system_prompt_path
 
-    async def _get_gemini_output(self, process, channel, author_id, msg_id_db, timeout_seconds, is_cronjob=False, prompt="", mention_user_id=None):
+    async def _get_gemini_output(self, process, channel, author_id, msg_id_db, timeout_seconds, is_cronjob: bool = False, prompt: str = "", mention_user_id=None):
+        """Collect synchronous (buffered) output from the Gemini CLI."""
         final_response = ""
         error = ""
         
@@ -392,6 +427,7 @@ class Agent:
         return final_response, channel
 
     async def _stream_gemini_output(self, process, channel, author_id, msg_id_db, timeout_seconds):
+        """Process standard asynchronous stream output from the Gemini CLI."""
         final_response = ""
         sender = StreamSender(self.bot, channel)
 
@@ -457,7 +493,8 @@ class Agent:
 
         return final_response
 
-    async def _handle_outbound_attachments(self, final_response, channel, cwd):
+    async def _handle_outbound_attachments(self, final_response: str, channel, cwd: str):
+        """Extract attachment references from the Gemini response and upload local files to Discord."""
         outbound_files = []
         if final_response:
             for match in re.finditer(r'\[attachment:\s*(.+?)\]', final_response):
@@ -485,6 +522,7 @@ class Agent:
                         await channel.send(f"Failed to send some attachments: {e}")
 
     async def process_single_message(self, row):
+        """Retrieve, lock, execute, and deliver a single database message record to the agent."""
         msg_id_db = row['id']
         channel_id = int(row['channel_id'])
         prompt = row['prompt']
@@ -571,6 +609,7 @@ class Agent:
                     print(f"Failed to remove temp system prompt file {system_prompt_path}: {e}")
 
     async def process_pending_messages_loop(self):
+        """Listen to the polling layer for pending tasks and trigger concurrent handlers."""
         while True:
             try:
                 busy_threads = list(self.running_processes.keys())
