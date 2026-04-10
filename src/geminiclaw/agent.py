@@ -121,7 +121,7 @@ class Agent:
             if silent:
                 logger.info(f"Cronjob triggered (silent): {prompt_file} scheduled running in background")
                 try:
-                    process, system_prompt_path = await self._execute_gemini_command(prompt, channel_id, self.bot.user_id, None)
+                    process, system_prompt_path = await self._execute_gemini_command(prompt, channel_id, self.bot.user_id, True)
                     stdout, stderr = await process.communicate()
                     if process.returncode != 0:
                         logger.error(f"Silent cronjob {prompt_file} failed: {stderr.decode().strip()}")
@@ -167,7 +167,7 @@ class Agent:
         if thread_session:
             args.extend(['-r', thread_session])
         
-        if self.bot.is_stream_off(str(channel_id)) or is_cronjob:
+        if is_cronjob or self.bot.is_stream_off(str(channel_id)):
             args.extend(['-o', 'json'])
         else:
             args.extend(['-o', 'stream-json'])
