@@ -136,18 +136,6 @@ class Agent:
                     logger.exception(f"Error executing silent cronjob {prompt_file}: {e}")
                 return
 
-            channel = self.bot.get_channel(int(channel_id))
-            if not channel:
-                try:
-                    channel = await self.bot.fetch_channel(int(channel_id))
-                except Exception:
-                    logger.exception(f"Cronjob Error: Could not fetch channel {channel_id}")
-                    return
-
-            if not channel:
-                logger.error(f"Cronjob Error: Channel {channel_id} not found.")
-                return
-
             if mention_user_id:
                 prompt = f"[mention:{mention_user_id}]{prompt}"
 
