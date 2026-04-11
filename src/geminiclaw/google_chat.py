@@ -370,6 +370,7 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
                     sender = chat_message.get('sender', {})
                     author_id = sender.get('name', 'unknown_user')
                     author_name = sender.get('displayName', 'Unknown User')
+                    author_email = sender.get('email', 'unknown_email')
                     
                     message_text = chat_message.get('text', '')
                     create_time = chat_message.get('createTime', 'unknown_time')
@@ -377,7 +378,7 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
                     attachments_json = self._handle_incoming_attachments(chat_message, message_id)
                     
                     # Format prompt with content, author, and timestamp
-                    prompt = f"{message_text}\n--- Message Above From {author_name} <@{author_id}> at {create_time} ---\n"
+                    prompt = f"{message_text}\n--- Message Above From {author_name} <@{author_id}> ({author_email}) at {create_time} ---\n"
                     
                     logger.info(f"Inserting message from {author_name} in channel {channel_id}")
                     db.insert_message(channel_id, message_id, author_id, prompt, attachments=attachments_json)
