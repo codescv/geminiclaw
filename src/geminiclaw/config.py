@@ -22,6 +22,7 @@ class Config:
             sys.exit(1)
 
         self.discord = self._raw_config.get("discord", {})
+        self.google_chat = self._raw_config.get("google_chat", {})
         self.gemini = self._raw_config.get("gemini", {})
         self.cronjobs = self._raw_config.get("cronjob", [])
         self.prompt = self._raw_config.get("prompt", {})
@@ -31,8 +32,9 @@ class Config:
         self.stream_off_channels = [str(c) for c in self.discord.get("stream_off_channels", [])]
         
         self.token = self.discord.get("token") or os.getenv("DISCORD_TOKEN")
-        if not self.token:
-            print("Error: discord.token not found in config.toml and DISCORD_TOKEN environment variable is not set")
+        
+        if not self.token and not self.google_chat.get("enabled"):
+            print("Error: Neither Discord nor Google Chat is configured. Please check config.toml")
             sys.exit(1)
             
         self.proxy = os.getenv('HTTP_PROXY') or os.getenv('http_proxy') or os.getenv('HTTPS_PROXY') or os.getenv('https_proxy')

@@ -6,6 +6,16 @@
 # Optional: List of users to always reply to without explicit mention (usernames or user IDs)
 # always_reply = ["user1", "user2"]
 
+[google_chat]
+# Enable Google Chat bot (true/false)
+# enabled = true
+
+# The Google Cloud Project ID where the Pub/Sub topic resides.
+# google_cloud_project = "your-project-id"
+
+# The Pub/Sub subscription name to listen to Google Chat messages.
+# google_chat_subscription = "your-subscription-id"
+
 [gemini]
 # Optional: API keys and cloud settings. The Gemini CLI will also respect standard environment variables.
 # It's recommended to set in env variables instead of here for better safety.

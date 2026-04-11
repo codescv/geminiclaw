@@ -12,6 +12,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from . import db
 from . import utils
+from .chatbot import ChatBot
 
 logger = utils.setup_logger(__name__)
 
@@ -27,7 +28,7 @@ class Agent:
     """
 
     def __init__(self,
-        bot,
+        bot: ChatBot,
         gemini_config: dict,
         prompt_config: dict = None,
         policy: list = None,
@@ -228,7 +229,10 @@ class Agent:
         
         system_prompt_content += await self.bot.get_system_instructions(channel_id)
 
-        system_prompt_path = f"/tmp/gemini_system_{channel_id}_{self.bot.user_id}.md"
+        timestamp_val = int(time.time())
+        safe_author_id = str(author_id).replace('/', '_').replace(':', '_')
+        system_prompt_path = f"/tmp/gemini_system_{safe_author_id}_{timestamp_val}.md"
+        
         with open(system_prompt_path, "w") as f:
             f.write(system_prompt_content)
             
@@ -379,7 +383,7 @@ class Agent:
     async def process_single_message(self, row):
         """Retrieve, lock, execute, and deliver a single database message record to the agent."""
         msg_id_db = row['id']
-        channel_id = int(row['channel_id'])
+        channel_id = row['channel_id']
         prompt = row['prompt']
         author_id = row['author_id']
         attachments_json = row['attachments'] if 'attachments' in row.keys() else None

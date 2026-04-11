@@ -2,7 +2,7 @@
 
 # Gemini Claw
 
-Gemini Claw is a Discord bot powered by the [Gemini CLI](https://github.com/google/gemini-cli). It acts as a bridge, allowing you to interact with the Gemini CLI agent directly from your Discord server.
+Gemini Claw is a bot for Discord and Google Chat powered by the [Gemini CLI](https://github.com/google/gemini-cli). It acts as a bridge, allowing you to interact with the Gemini CLI agent directly from your chat platform.
 
 # Why Gemini Claw?
 
@@ -165,3 +165,4 @@ For more advanced usage, check out our dedicated tutorials:
 - [Memory Management](tutorials/memory_management.md)
 - [Background Tasks](tutorials/background_tasks.md)
 - [Security](tutorials/security.md)
+- [Google Chat Configuration](tutorials/google_chat_tutorial.md)

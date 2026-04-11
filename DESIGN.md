@@ -9,13 +9,15 @@ The only major piece missing is communication channels that allow it to be contr
 
 Message flow:
 ```text
-Inbound Channels (e.g. Discord) -> SQLite Database -> Polling loop (Python async task) -> Gemini CLI Subprocess -> Outbound Response
+Inbound Channels (e.g. Discord, Google Chat) -> SQLite Database -> Polling loop (Python async task) -> Gemini CLI Subprocess -> Outbound Response
 ```
 
 # Components
 
-**1. Channels (Discord Bot)**
-- **Inbound:** Listens for mentions, whitelisted users (if not in a thread and no explicit mentions), or specific commands in a Discord channel using `discord.py`. Parses the user's message and inserts it into an SQLite database with a status of `pending`.
+**1. Channels (Discord, Google Chat)**
+- Supports multiple chat platforms via a common interface.
+- **Discord Bot:** Listens for mentions, whitelisted users (if not in a thread and no explicit mentions), or specific commands in a Discord channel using `discord.py`. Parses the user's message and inserts it into an SQLite database with a status of `pending`.
+- **Google Chat Bot:** Basic non-streaming implementation added.
 - **Outbound:** An asynchronous task running alongside the bot continuously polls the SQLite database for messages marked as `completed` or `failed`. Once found, it sends the stored response back to the corresponding Discord channel (or the channel specified via `[to_channel: <channel_id>]` in the response override) and updates the record to `delivered`.
 
 **2. Database Layer**
