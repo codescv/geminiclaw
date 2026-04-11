@@ -31,7 +31,7 @@ The bot sends replies using the Google Chat REST API.
 If you are testing locally, you can use your user credentials instead of a service account:
 1. Run `gcloud auth application-default login` with the specific scope required for Google Chat:
    ```bash
-   gcloud auth application-default login --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/chat.messages.create,https://www.googleapis.com/auth/chat.messages.readonly
+   gcloud auth application-default login --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/chat.messages.create,https://www.googleapis.com/auth/chat.messages.readonly,https://www.googleapis.com/auth/chat.messages.reactions.create
    ```
 2. Ensure you set a quota project:
    ```bash
