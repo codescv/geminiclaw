@@ -116,7 +116,7 @@ def set_thread_active(thread_id, active=True):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT OR REPLACE INTO threads (thread_id, is_active) VALUES (?, ?)",
+        "INSERT INTO threads (thread_id, is_active) VALUES (?, ?) ON CONFLICT(thread_id) DO UPDATE SET is_active = excluded.is_active",
         (str(thread_id), 1 if active else 0)
     )
     conn.commit()

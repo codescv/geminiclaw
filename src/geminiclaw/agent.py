@@ -167,6 +167,8 @@ class Agent:
         thread_session = db.get_thread_session(channel_id)
         if thread_session:
             args.extend(['-r', thread_session])
+        else:
+            logger.info(f"Creating a new session for {channel_id}")
         
         if is_cronjob or self.bot.is_stream_off(str(channel_id)):
             args.extend(['-o', 'json'])

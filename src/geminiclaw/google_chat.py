@@ -224,13 +224,13 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
                 
             result = service.spaces().messages().create(
                 parent=base_space,
-                body=body
+                body=body,
+                messageReplyOption='REPLY_MESSAGE_OR_FAIL'
             ).execute()
-            
             logger.info(f"Successfully sent message via Discovery API: {result.get('name')}")
-                
+
         except Exception as e:
-            logger.exception(f"Error sending message to Google Chat: {e}")
+            logger.exception(f"Error sending message to Google Chat")
 
     async def stream_start(self, channel_id: str):
         pass
@@ -336,6 +336,7 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
                     # Use thread name as channel_id for threading
                     if thread and thread.get('name'):
                         channel_id = f"gchat:{thread.get('name')}"
+                        db.set_thread_active(channel_id)
                     elif space and space.get('name'):
                         channel_id = f"gchat:{space.get('name')}"
                     else:
