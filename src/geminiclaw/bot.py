@@ -20,7 +20,10 @@ def main(service_name="com.codescv.geminiclaw"):
     token = None
 
     if is_google_chat:
-        bot = GoogleChatBot(google_chat_config=config.google_chat)
+        bot = GoogleChatBot(
+            google_chat_config=config.google_chat,
+            gemini_config=config.gemini
+        )
     else:
         intents = discord.Intents.default()
         intents.message_content = True

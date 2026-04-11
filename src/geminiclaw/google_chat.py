@@ -66,6 +66,25 @@ Sample message from google chat:
           },
           "spaceUri": "space uri"
         },
+        "attachment": [
+          {
+            "name": "attachment name",
+            "contentName": "content name",
+            "contentType": "content type",
+            "attachmentDataRef": {
+              "resourceName": "attachment resource name"
+            },
+            "thumbnailUri": "thumbnail uri",
+            "downloadUri": "download uri",
+            "messageMetadata": {
+              "name": "message metadata name",
+              "sender": "sender",
+              "createTime": "create time",
+              "updateTime": "update time"
+            },
+            "source": "source"
+          }
+        ],
         "argumentText": "message text",
         "retentionSettings": {
           "state": "PERMANENT"
@@ -80,16 +99,20 @@ Sample message from google chat:
 """
 
 import os
+import json
+import requests
 import re
 import asyncio
-import json
 import logging
+import mimetypes
+import uuid
 from contextlib import asynccontextmanager
 from google.cloud import pubsub_v1
 from .chatbot import ChatBot
 import google.auth
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+from googleapiclient.http import MediaIoBaseDownload
 from . import db
 from . import utils
 
@@ -101,8 +124,9 @@ class GoogleChatBot(ChatBot):
     Google Chat implementation of the ChatBot using Pub/Sub for receiving messages.
     Currently only supports non-streaming mode for outbound messages.
     """
-    def __init__(self, google_chat_config: dict):
+    def __init__(self, google_chat_config: dict, gemini_config: dict = None):
         self.google_chat_config = google_chat_config
+        self.gemini_config = gemini_config or {}
         self.project_id = google_chat_config.get('google_cloud_project')
         self.subscription_id = google_chat_config.get('google_chat_subscription')
         self.subscriber = None
@@ -170,7 +194,7 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
             uploaded_attachments = []
             for file_path in attachments:
                 if os.path.exists(file_path):
-                    import mimetypes
+                    
                     mime_type, _ = mimetypes.guess_type(file_path)
                     if not mime_type:
                         mime_type = 'application/octet-stream'
@@ -220,6 +244,68 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
     async def update_idle_thread_name(self, channel_id: str, response: str):
         pass
 
+    def _handle_incoming_attachments(self, chat_message: dict, message_id: str) -> str | None:
+        """Extract and download attachments from incoming message.
+        
+        Returns JSON string of relative paths or None.
+        """
+        attachments_paths = []
+        gchat_attachments = chat_message.get('attachment', [])
+        if not gchat_attachments:
+            return None
+        
+        cwd = self.gemini_config.get('workspace', '.')
+        attachments_dir = self.gemini_config.get('attachments_dir', 'attachments')
+        if not os.path.isabs(attachments_dir):
+            attachments_dir = os.path.join(cwd, attachments_dir)
+            
+        try:
+            os.makedirs(attachments_dir, exist_ok=True)
+            
+            credentials, _ = google.auth.default(scopes=['https://www.googleapis.com/auth/chat.messages.readonly'])
+            
+            service = build('chat', 'v1', credentials=credentials)
+            
+            for attachment in gchat_attachments:
+                filename = attachment.get('contentName')
+                logger.info(f"attachment: {filename}")
+                
+                # Get resourceName from attachmentDataRef
+                data_ref = attachment.get('attachmentDataRef', {})
+                resource_name = data_ref.get('resourceName')
+                
+                if resource_name:
+                    ext = os.path.splitext(filename)[1]
+                    if not ext:
+                        content_type = attachment.get('contentType')
+                        if content_type:
+                            ext = mimetypes.guess_extension(content_type) or ''
+                    safe_name = f"{uuid.uuid4()}{ext}"
+                    filepath = os.path.join(attachments_dir, safe_name)
+                    logger.info(f'save attachment saved to: {filepath}')
+                    
+                    request = service.media().download_media(resourceName=resource_name)
+                    
+                    with open(filepath, 'wb') as f:
+                        downloader = MediaIoBaseDownload(f, request)
+                        done = False
+                        while done is False:
+                            status, done = downloader.next_chunk()
+                            
+                    if filepath.startswith(os.path.abspath(cwd)):
+                        rel_path = os.path.relpath(filepath, cwd)
+                    else:
+                        rel_path = filepath
+                    attachments_paths.append(rel_path)
+                else:
+                    logger.warning(f"No resourceName found for attachment {filename}")
+                    
+            logger.info(f"Downloaded {len(attachments_paths)} attachments to {attachments_dir}")
+        except Exception as e:
+            logger.exception(f"Failed to download attachments")
+            
+        return json.dumps(attachments_paths) if attachments_paths else None
+
     async def start(self):
         """Start listening to Pub/Sub subscription."""
         logger.info("starting google chat")
@@ -235,8 +321,7 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
             logger.info(message.attributes)
             try:
                 data = json.loads(message.data.decode('utf-8'))
-
-                print(json.dumps(data, indent=2))
+                # print(json.dumps(data, indent=2))
                 
                 # Google Chat events documentation:
                 # https://developers.google.com/chat/api/guides/message-formats/events
@@ -265,11 +350,13 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
                     message_text = chat_message.get('text', '')
                     create_time = chat_message.get('createTime', 'unknown_time')
                     
+                    attachments_json = self._handle_incoming_attachments(chat_message, message_id)
+                    
                     # Format prompt with content, author, and timestamp
                     prompt = f"{message_text}\n--- Message Above From {author_name} <@{author_id}> at {create_time} ---\n"
                     
                     logger.info(f"Inserting message from {author_name} in channel {channel_id}")
-                    db.insert_message(channel_id, message_id, author_id, prompt)
+                    db.insert_message(channel_id, message_id, author_id, prompt, attachments=attachments_json)
                     
                 message.ack()
             except Exception as e:
