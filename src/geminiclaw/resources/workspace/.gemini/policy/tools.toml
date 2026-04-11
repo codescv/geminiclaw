@@ -9,7 +9,7 @@ commandPrefix = [
   # common bash commands
   "ls", "mv", "find", "echo", "date", "cat", "grep", "mkdir", "which", "cp", "chmod", "tar", "unzip",
   "touch", "ln", "sort", "head", "tail", "ps", "kill", "pkill", "pgrep", "pwd", "env", "wc", "stat",
-  "nohup", "sed", "awk"
+  "nohup", "sed", "awk",
   # common utilities
   "git", "curl", "uv", "npm", "nodejs", "npx", "ffmpeg", "ffprobe", "cmake",
   "geminiclaw"

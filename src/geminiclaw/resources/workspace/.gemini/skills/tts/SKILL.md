@@ -30,3 +30,6 @@ You can place them at the beginning of the text.
 - `[sad] I feel a bit lonely today.`
 - `[laughing] Haha, that's actually quite funny!`
 - `[warm] Can I help you with this?`
+
+# Best Practice
+Use the `stt` skill to check against the generated audio. If the output is garbage text, try again. Try at most 3 times.
