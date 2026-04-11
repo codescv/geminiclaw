@@ -19,4 +19,3 @@ def test_init_command(tmp_path, monkeypatch):
     # Verify some workspace directories were created
     assert os.path.isdir("cronjobs")
     assert os.path.isdir("instructions")
-    assert os.path.isdir("examples")

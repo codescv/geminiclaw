@@ -141,17 +141,34 @@ class DiscordBot(commands.Bot):
             self.loop.create_task(self.agent.process_pending_messages_loop())
             await self.agent.start_cronjobs()
 
+    def get_channel_from_id_sync(self, channel_id: str):
+        """Safely get a channel from ID from cache, handling None and type conversion."""
+        if not channel_id:
+            return None
+        try:
+            return self.get_channel(int(channel_id))
+        except (ValueError, TypeError):
+            return None
+
+    async def get_channel_from_id(self, channel_id: str):
+        """Safely get a channel from ID, handling None, cache lookup, and API fetch."""
+        channel = self.get_channel_from_id_sync(channel_id)
+        if not channel and channel_id:
+            try:
+                channel = await self.fetch_channel(int(channel_id))
+            except (discord.HTTPException, ValueError, TypeError):
+                pass
+        return channel
+
     def is_stream_off(self, channel_id: str) -> bool:
         stream_off = str(channel_id) in self.stream_off_channels
-        channel = self.get_channel(int(channel_id))
+        channel = self.get_channel_from_id_sync(channel_id)
         if channel and isinstance(channel, discord.Thread) and getattr(channel, 'parent_id', None):
             stream_off = stream_off or (str(channel.parent_id) in self.stream_off_channels)
         return stream_off
 
     async def stream_start(self, channel_id: str):
-        channel = self.get_channel(int(channel_id))
-        if not channel:
-            channel = await self.fetch_channel(int(channel_id))
+        channel = await self.get_channel_from_id(channel_id)
         sender = StreamSender(self, channel)
         self._active_streams[str(channel_id)] = sender
 
@@ -168,21 +185,11 @@ class DiscordBot(commands.Bot):
             await sender.flush()
 
     async def channel_exists(self, channel_id: str) -> bool:
-        channel = self.get_channel(int(channel_id))
-        if not channel:
-            try:
-                channel = await self.fetch_channel(int(channel_id))
-            except:
-                pass
+        channel = await self.get_channel_from_id(channel_id)
         return channel is not None
 
     async def get_channel_topic(self, channel_id: str) -> str:
-        channel = self.get_channel(int(channel_id))
-        if not channel:
-            try:
-                channel = await self.fetch_channel(int(channel_id))
-            except:
-                pass
+        channel = await self.get_channel_from_id(channel_id)
         if channel:
             if isinstance(channel, discord.Thread) and hasattr(channel.parent, 'topic'):
                 return channel.parent.topic
