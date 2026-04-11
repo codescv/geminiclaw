@@ -306,6 +306,28 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
             
         return json.dumps(attachments_paths) if attachments_paths else None
 
+    def add_reaction(self, parent_message_name: str, emoji: str):
+        """Add a reaction to a message."""
+        logger.info(f"Adding reaction {emoji} to message {parent_message_name}")
+        try:
+            cred, _ = google.auth.default(scopes=['https://www.googleapis.com/auth/chat.messages.reactions.create'])
+            chat_service = build('chat', 'v1', credentials=cred)
+            
+            body = {
+                "emoji": {
+                    "unicode": emoji
+                }
+            }
+            
+            result = chat_service.spaces().messages().reactions().create(
+                parent=parent_message_name,
+                body=body
+            ).execute()
+            
+            logger.info(f"Successfully added reaction: {result.get('name')}")
+        except Exception as e:
+            logger.warning(f"Failed to add reaction: {e}")
+
     async def start(self):
         """Start listening to Pub/Sub subscription."""
         logger.info("starting google chat")
@@ -359,6 +381,10 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
                     logger.info(f"Inserting message from {author_name} in channel {channel_id}")
                     db.insert_message(channel_id, message_id, author_id, prompt, attachments=attachments_json)
                     
+                    # Add reaction to demonstrate the feature
+                    if message_id != 'unknown_message':
+                        self.add_reaction(message_id, "👀")
+                        
                 message.ack()
             except Exception as e:
                 logger.exception(f"Error processing Pub/Sub message: {e}")

@@ -50,3 +50,28 @@ async def test_google_chat_bot_pubsub():
     assert mock_subscriber.subscribe.called
     
     await bot.stop()
+
+@pytest.mark.asyncio
+async def test_google_chat_bot_add_reaction():
+    from unittest.mock import MagicMock, patch
+    
+    bot = GoogleChatBot(google_chat_config={})
+    
+    mock_service = MagicMock()
+    mock_messages = MagicMock()
+    mock_reactions = MagicMock()
+    mock_create = MagicMock()
+    
+    mock_service.spaces.return_value.messages.return_value.reactions.return_value = mock_reactions
+    mock_reactions.create.return_value = mock_create
+    mock_create.execute.return_value = {'name': 'spaces/1/messages/1/reactions/1'}
+    
+    mock_creds = MagicMock()
+    mock_creds.universe_domain = 'googleapis.com'
+    
+    with patch('geminiclaw.google_chat.build', return_value=mock_service), \
+         patch('google.auth.default', return_value=(mock_creds, 'project-id')):
+        
+        bot.add_reaction("spaces/1/messages/1", "👍")
+        
+    assert mock_reactions.create.called
