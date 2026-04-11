@@ -331,6 +331,7 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
     async def start(self):
         """Start listening to Pub/Sub subscription."""
         logger.info("starting google chat")
+        loop = asyncio.get_running_loop()
         if not self.project_id or not self.subscription_id:
             logger.error("Google Cloud Project ID or Subscription ID missing in config.")
             return
@@ -384,6 +385,9 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
                     # Add reaction to demonstrate the feature
                     if message_id != 'unknown_message':
                         self.add_reaction(message_id, "👀")
+                        
+                    # Send "thinking..." message
+                    asyncio.run_coroutine_threadsafe(self.send_message(channel_id, "thinking..."), loop)
                         
                 message.ack()
             except Exception as e:
