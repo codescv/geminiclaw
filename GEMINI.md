@@ -2,6 +2,7 @@
 - Use `Python` as the main language. 
 - Use `uv` to manage dependencies. Always use `uv run`, `uv add` etc instead of running Python or pip directly.
 - Respect Python idioms: All Python source code should be placed under the `src` directory. The `src` directory itself should not be a Python package, and the entrypoint should be a file placed under the `src` directory.
+- Unless there is a strong reason, add import statements at the top of your module.
 - Use type annotations for function arguments.
 - Use logging instead of print (for exceptions, line numbers etc)
 - Add docstrings for all functions more than 5 lines of code.

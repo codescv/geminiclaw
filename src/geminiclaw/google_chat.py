@@ -80,12 +80,16 @@ Sample message from google chat:
 """
 
 import os
+import re
 import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
 from google.cloud import pubsub_v1
 from .chatbot import ChatBot
+import google.auth
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 from . import db
 from . import utils
 
@@ -116,7 +120,12 @@ class GoogleChatBot(ChatBot):
         return f"User_{author_id}"
 
     async def get_system_instructions(self, channel_id: str) -> str:
-        return "---BEGIN GOOGLE CHAT INSTRUCTIONS---\nYou are in a Google Chat space.\n---END GOOGLE CHAT INSTRUCTIONS---\n"
+        return """
+---BEGIN GOOGLE CHAT INSTRUCTIONS---
+You are in a Google Chat space.
+When sending attachments, use the exact syntax: [attachment: /path/to/file]
+---END GOOGLE CHAT INSTRUCTIONS---
+"""
 
     @asynccontextmanager
     async def typing(self, channel_id: str):
@@ -131,6 +140,13 @@ class GoogleChatBot(ChatBot):
     async def send_message(self, channel_id: str, content: str):
         logger.info(f"Google Chat [Channel {channel_id}]: {content}")
         
+        # Extract attachments
+        attachment_pattern = re.compile(r'\[attachment: (.*?)\]')
+        attachments = attachment_pattern.findall(content)
+        
+        # Remove attachment blocks from content
+        cleaned_content = attachment_pattern.sub('', content).strip()
+        
         space_name = channel_id
         if space_name.startswith("gchat:"):
             space_name = space_name[len("gchat:"):]
@@ -143,38 +159,51 @@ class GoogleChatBot(ChatBot):
             base_space = space_name
             
         try:
-            import google.auth
-            import google.auth.transport.requests
-            import requests
-            
             credentials, project_id = google.auth.default(
                 scopes=['https://www.googleapis.com/auth/chat.messages.create'],
                 quota_project_id=self.project_id
             )
-            if project_id != self.project_id:
-                logger.error(f"Project id mismatch: gchat using {project_id} instead of {self.project_id}")
-            auth_request = google.auth.transport.requests.Request()
-            credentials.refresh(auth_request)
             
-            url = f"https://chat.googleapis.com/v1/{base_space}/messages"
-            headers = {
-                "Authorization": f"Bearer {credentials.token}",
-                "Content-Type": "application/json",
-                "X-Goog-User-Project": project_id
-            }
-            payload = {
-                "text": content
-            }
+            service = build('chat', 'v1', credentials=credentials)
             
+            # Handle attachments
+            uploaded_attachments = []
+            for file_path in attachments:
+                if os.path.exists(file_path):
+                    import mimetypes
+                    mime_type, _ = mimetypes.guess_type(file_path)
+                    if not mime_type:
+                        mime_type = 'application/octet-stream'
+                        
+                    media = MediaFileUpload(file_path, mimetype=mime_type)
+                    
+                    attachment_uploaded = service.media().upload(
+                        parent=base_space,
+                        body={'filename': os.path.basename(file_path)},
+                        media_body=media
+                    ).execute()
+                    
+                    uploaded_attachments.append(attachment_uploaded)
+                else:
+                    logger.warning(f"Attachment file not found: {file_path}")
+            
+            # Create message payload
+            body = {
+                'text': cleaned_content
+            }
+            if uploaded_attachments:
+                body['attachment'] = uploaded_attachments
+                
             # If it's a thread, add thread info to reply in thread
             if '/threads/' in space_name:
-                payload["thread"] = {"name": space_name}
+                body["thread"] = {"name": space_name}
                 
-            response = requests.post(url, headers=headers, json=payload)
-            if response.status_code != 200:
-                logger.error(f"Failed to send message to Google Chat: {response.text}")
-            else:
-                logger.info(f"Successfully sent message to Google Chat.")
+            result = service.spaces().messages().create(
+                parent=base_space,
+                body=body
+            ).execute()
+            
+            logger.info(f"Successfully sent message via Discovery API: {result.get('name')}")
                 
         except Exception as e:
             logger.exception(f"Error sending message to Google Chat: {e}")
@@ -206,6 +235,8 @@ class GoogleChatBot(ChatBot):
             logger.info(message.attributes)
             try:
                 data = json.loads(message.data.decode('utf-8'))
+
+                print(json.dumps(data, indent=2))
                 
                 # Google Chat events documentation:
                 # https://developers.google.com/chat/api/guides/message-formats/events
