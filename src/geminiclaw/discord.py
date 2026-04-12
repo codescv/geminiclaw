@@ -198,34 +198,32 @@ class DiscordBot(commands.Bot):
         return ""
 
     async def get_channel_users_str(self, channel_id: str) -> str:
-        channel = self.get_channel(int(channel_id))
+        channel = await self.get_channel_from_id(channel_id)
         if not channel:
-            try:
-                channel = await self.fetch_channel(int(channel_id))
-            except:
-                logger.error(f"Can't get channel {channel_id}")
+            logger.error(f"Can't get channel {channel_id}")
+            return ""
+
         user_list_str = ""
-        if channel:
-            try:
-                members = []
-                if getattr(channel, 'type', None) == discord.ChannelType.private:
-                    if hasattr(channel, 'recipient') and channel.recipient:
-                        members = [channel.recipient]
-                elif hasattr(channel, 'members') and not isinstance(channel, discord.Thread):
-                    members = channel.members
-                elif hasattr(channel, 'parent') and hasattr(channel.parent, 'members'):
-                    members = channel.parent.members
-                elif hasattr(channel, 'guild') and hasattr(channel.guild, 'members'):
-                    members = channel.guild.members
-                valid_members = [m for m in members if m.id != self.user.id]
-                if valid_members:
-                    user_lines = []
-                    for m in valid_members[:5]:
-                        name = getattr(m, 'display_name', getattr(m, 'name', 'Unknown'))
-                        user_lines.append(f"  - {name} <@{m.id}>")
-                    user_list_str = "Here are some users in this channel you can mention:\n" + "\n".join(user_lines) + "\n"
-            except:
-                logger.exception(f"Can't get user list for channel {channel_id}")
+        try:
+            members = []
+            if getattr(channel, 'type', None) == discord.ChannelType.private:
+                if hasattr(channel, 'recipient') and channel.recipient:
+                    members = [channel.recipient]
+            elif hasattr(channel, 'members') and not isinstance(channel, discord.Thread):
+                members = channel.members
+            elif hasattr(channel, 'parent') and hasattr(channel.parent, 'members'):
+                members = channel.parent.members
+            elif hasattr(channel, 'guild') and hasattr(channel.guild, 'members'):
+                members = channel.guild.members
+            valid_members = [m for m in members if m.id != self.user.id]
+            if valid_members:
+                user_lines = []
+                for m in valid_members[:5]:
+                    name = getattr(m, 'display_name', getattr(m, 'name', 'Unknown'))
+                    user_lines.append(f"  - {name} <@{m.id}>")
+                user_list_str = "Here are some users in this channel you can mention:\n" + "\n".join(user_lines) + "\n"
+        except:
+            logger.exception(f"Can't get user list for channel {channel_id}")
         return user_list_str
 
     async def _send_plain_text(self, channel, text: str):
@@ -250,12 +248,7 @@ class DiscordBot(commands.Bot):
             await channel.send(chunk)
 
     async def send_message(self, channel_id: str, content: str):
-        channel = self.get_channel(int(channel_id))
-        if not channel:
-            try:
-                channel = await self.fetch_channel(int(channel_id))
-            except:
-                pass
+        channel = await self.get_channel_from_id(channel_id)
         if channel:
             cwd = self.gemini_config.get('workspace', '.')
             remaining_text = content
@@ -277,12 +270,7 @@ class DiscordBot(commands.Bot):
             await self._send_plain_text(channel, remaining_text)
 
     async def send_attachments(self, channel_id: str, file_paths: list[str]):
-        channel = self.get_channel(int(channel_id))
-        if not channel:
-            try:
-                channel = await self.fetch_channel(int(channel_id))
-            except:
-                pass
+        channel = await self.get_channel_from_id(channel_id)
         if channel:
             discord_files = []
             for path in file_paths:
@@ -294,7 +282,7 @@ class DiscordBot(commands.Bot):
                 await channel.send("", files=discord_files)
 
     def typing(self, channel_id: str):
-        channel = self.get_channel(int(channel_id))
+        channel = self.get_channel_from_id_sync(channel_id)
         if channel and hasattr(channel, 'typing'):
             return channel.typing()
         from contextlib import asynccontextmanager
@@ -352,12 +340,7 @@ class DiscordBot(commands.Bot):
         return instructions
 
     async def ensure_thread_for_cronjob(self, channel_id: str, prompt: str, mention_user_id: str, gemini_session_id: str) -> str:
-        channel = self.get_channel(int(channel_id))
-        if not channel:
-            try:
-                channel = await self.fetch_channel(int(channel_id))
-            except:
-                pass
+        channel = await self.get_channel_from_id(channel_id)
         if channel:
             if not isinstance(channel, discord.Thread) and getattr(channel, 'type', None) != discord.ChannelType.private:
                 try:
@@ -381,12 +364,7 @@ class DiscordBot(commands.Bot):
         return str(channel_id)
 
     async def update_idle_thread_name(self, channel_id: str, response: str):
-        channel = self.get_channel(int(channel_id))
-        if not channel:
-            try:
-                channel = await self.fetch_channel(int(channel_id))
-            except:
-                pass
+        channel = await self.get_channel_from_id(channel_id)
         if channel and isinstance(channel, discord.Thread):
             count = db.get_message_count(channel.id)
             if count <= 4:
