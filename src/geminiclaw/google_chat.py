@@ -377,8 +377,10 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
                     
                     attachments_json = self._handle_incoming_attachments(chat_message, message_id)
                     
-                    # Format prompt with content, author, and timestamp
-                    prompt = f"{message_text}\n--- Message Above From {author_name} <@{author_id}> ({author_email}) at {create_time} ---\n"
+                    thread_name = thread.get('name') if thread else None
+                    thread_str = f"in [Thread: {thread_name}]" if thread_name else ""
+                    # Format prompt with content, author, timestamp, and thread name
+                    prompt = f"{message_text}\n--- From {author_name} ({author_email}) {thread_str} ---\n"
                     
                     logger.info(f"Inserting message from {author_name} in channel {channel_id}")
                     db.insert_message(channel_id, message_id, author_id, prompt, attachments=attachments_json)
