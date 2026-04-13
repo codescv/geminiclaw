@@ -114,3 +114,23 @@ async def test_send_long_message_split_with_mention(bot_instance):
     assert calls[0][0][0] == line1
     # Second chunk does NOT have mention
     assert calls[1][0][0] == line2
+
+
+@pytest.mark.asyncio
+async def test_on_ready_guard(bot_instance):
+    bot_instance.agent.process_pending_messages_loop = AsyncMock()
+    bot_instance.agent.start_cronjobs = AsyncMock()
+    bot_instance.loop = asyncio.get_running_loop()
+    
+    # First call
+    await bot_instance.on_ready()
+    
+    assert bot_instance.agent.process_pending_messages_loop.call_count == 1
+    assert bot_instance.agent.start_cronjobs.call_count == 1
+    
+    # Second call
+    await bot_instance.on_ready()
+    
+    assert bot_instance.agent.process_pending_messages_loop.call_count == 1
+    assert bot_instance.agent.start_cronjobs.call_count == 1
+

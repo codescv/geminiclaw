@@ -7,6 +7,7 @@ from discord.ext import commands
 
 from . import db
 from . import utils
+from . import chatbot
 
 logger = utils.setup_logger(__name__)
 
@@ -123,7 +124,7 @@ class StreamSender:
         return msg
 
 
-class DiscordBot(commands.Bot):
+class DiscordBot(commands.Bot, chatbot.ChatBot):
     MAX_RESPONSE_LENGTH = 1900
 
     def __init__(self, gemini_config, service_name="com.codescv.geminiclaw", cronjobs=None, prompt_config=None, always_reply=None, stream_off_channels=None, policy=None, *args, **kwargs):
@@ -134,9 +135,14 @@ class DiscordBot(commands.Bot):
         self.stream_off_channels = stream_off_channels or []
         self.agent = None  # Will be set by main()
         self._active_streams = {}
+        self._ready_handled = False
 
     async def on_ready(self):
-        print(f'Logged in as {self.user.name} ({self.user.id})')
+        logger.info(f'Logged in as {self.user.name} ({self.user.id})')
+        if self._ready_handled:
+            logger.info("on_ready called again, skipping initialization.")
+            return
+        self._ready_handled = True
         if self.agent:
             self.loop.create_task(self.agent.process_pending_messages_loop())
             await self.agent.start_cronjobs()
