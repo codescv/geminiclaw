@@ -23,4 +23,8 @@ channel_id = "123456789012345678"            # Discord Channel ID to send the no
 mention_user_id = "123456789012345678"       # Do you want to be notified? If yes, put user's digital user id
 ```
 
-
+# Restart
+After the config file change, send the following for user to confirm:
+- the `cronjob` section to user
+- the job markdown
+Then ask if the user wants to modify anything. If not, ask the user to use `/restart` to restart the server.
