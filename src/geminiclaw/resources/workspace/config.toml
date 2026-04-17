@@ -70,7 +70,6 @@ schedule = "*/30 * * * *"
 prompt = "cronjobs/Heartbeat.md"
 # default notification channel for heartbeat messages, set None to disable heartbeat
 channel_id = "channel id"
-silent = true
 skip_if_empty = "memory/background_tasks.jsonl"
 
 # This consolidates memory for project progresses and errors.

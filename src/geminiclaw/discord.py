@@ -4,6 +4,7 @@ import subprocess
 import signal
 import discord
 from discord.ext import commands
+from discord import app_commands
 
 from . import db
 from . import utils
@@ -146,6 +147,62 @@ class DiscordBot(commands.Bot, chatbot.ChatBot):
         if self.agent:
             self.loop.create_task(self.agent.process_pending_messages_loop())
             await self.agent.start_cronjobs()
+
+    async def setup_hook(self):
+        # Register slash commands
+        @self.tree.command(name="stop", description="Deactivate the current thread")
+        async def stop(interaction: discord.Interaction):
+            is_thread = isinstance(interaction.channel, discord.Thread)
+            if is_thread:
+                db.set_thread_active(interaction.channel.id, False)
+                await interaction.response.send_message("🛑 Thread deactivated.")
+            else:
+                await interaction.response.send_message("This command can only be used in threads.", ephemeral=True)
+
+        @self.tree.command(name="continue", description="Reactivate the current thread")
+        async def continue_cmd(interaction: discord.Interaction):
+            is_thread = isinstance(interaction.channel, discord.Thread)
+            if is_thread:
+                db.set_thread_active(interaction.channel.id, True)
+                await interaction.response.send_message("▶️ Thread reactivated.")
+            else:
+                await interaction.response.send_message("This command can only be used in threads.", ephemeral=True)
+
+        @self.tree.command(name="kill", description="Kill the running process for this channel")
+        async def kill(interaction: discord.Interaction):
+            chan_id_str = str(interaction.channel.id)
+            if self.agent and chan_id_str in self.agent.running_processes:
+                process = self.agent.running_processes[chan_id_str]
+                if process:
+                    logger.info(f'killing process: {process.pid} for channel {chan_id_str}')
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    await interaction.response.send_message("💀 Process killed.")
+                else:
+                    await interaction.response.send_message("Can't find the process to kill.", ephemeral=True)
+            else:
+                await interaction.response.send_message("No running process found for this channel.", ephemeral=True)
+
+        @self.tree.command(name="restart", description="Restart the bot service")
+        async def restart(interaction: discord.Interaction):
+            await interaction.response.send_message("🔄 Restarting service...")
+            try:
+                subprocess.Popen([
+                    "geminiclaw", 
+                    "service", 
+                    "restart", 
+                    "--service-name", 
+                    self.service_name
+                ], start_new_session=True)
+            except Exception as e:
+                logger.error(f"Failed to run restart command: {e}")
+                await interaction.followup.send(f"Failed to restart service: {e}", ephemeral=True)
+
+        # Sync commands
+        await self.tree.sync()
+        logger.info("Slash commands synced.")
 
     def get_channel_from_id_sync(self, channel_id: str):
         """Safely get a channel from ID from cache, handling None and type conversion."""
@@ -416,58 +473,6 @@ class DiscordBot(commands.Bot, chatbot.ChatBot):
 
         logger.info(f"Received Message: (first 120 chars)\n{message.content[:120]}\nfrom {message.author}\n"
               f"is_thread: {is_thread}\n is_dm: {is_dm}\n is_bot_mentioned: {is_bot_mentioned}")
-
-        if message.content.strip().lower() == "-stop":
-            if is_thread:
-                db.set_thread_active(message.channel.id, False)
-                try:
-                    await message.add_reaction("🛑")
-                except Exception:
-                    pass
-            return
-
-        if message.content.strip().lower() == "-continue":
-            if is_thread:
-                db.set_thread_active(message.channel.id, True)
-                try:
-                    await message.add_reaction("▶️")
-                except Exception:
-                    pass
-            return
-
-        if message.content.strip().lower() == "-kill":
-            chan_id_str = str(message.channel.id)
-            if self.agent and chan_id_str in self.agent.running_processes:
-                process = self.agent.running_processes[chan_id_str]
-                if process:
-                    logger.info(f'killing process: {process.pid} for channel {chan_id_str}')
-                    try:
-                        os.killpg(process.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                    try:
-                        await message.add_reaction("💀")
-                    except Exception:
-                        pass
-                else:
-                    logger.warning(f"Can't find the process to kill. Channel Id: {chan_id_str}")
-            else:
-                logger.warning(f"Can't find the process to kill. Channel Id: {chan_id_str}")
-            return
-
-        if message.content.strip().lower() == "-restart":
-            try:
-                await message.add_reaction("🔄")
-                subprocess.Popen([
-                    "geminiclaw", 
-                    "service", 
-                    "restart", 
-                    "--service-name", 
-                    self.service_name
-                ], start_new_session=True)
-            except Exception as e:
-                logger.error(f"Failed to run restart command: {e}")
-            return
 
         if len(message.content.strip()) == 0 and not message.attachments:
             # empty message can happen with new thread created by someone else

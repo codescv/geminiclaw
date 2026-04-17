@@ -59,9 +59,9 @@ Inbound Channels (e.g. Discord, Google Chat) -> SQLite Database -> Polling loop 
  
 # Process Management
 - **Single Process:** The Discord Bot (`discord.py` client loop) and the database polling mechanism will run within the same Python process using `asyncio` tasks. This avoids the overhead and complexity of managing multiple background services, while still keeping the architecture decoupled via the SQLite layer.
-- **Process Killing:** The bot tracks running `gemini` subprocesses in a dictionary. When a `-kill` command is received in a channel, it terminates the process for that specific channel (or thread) manually.
-- **Process Restarting:** When a `-restart` command is received, the bot spawns a background shell command `geminiclaw service restart` to restart the bot service itself. Use with caution as it will disconnect the bot temporarily.
-- **Killing Active Commands**: If a bot is running a long-running prompt and you want to terminate it, send `-kill` in the thread. This will kill the current running `gemini` CLI process for that thread.
+- **Process Killing:** The bot tracks running `gemini` subprocesses in a dictionary. When a `/kill` slash command is received in a channel, it terminates the process for that specific channel (or thread) manually.
+- **Process Restarting:** When a `/restart` slash command is received, the bot spawns a background shell command `geminiclaw service restart` to restart the bot service itself. Use with caution as it will disconnect the bot temporarily.
+- **Killing Active Commands**: If a bot is running a long-running prompt and you want to terminate it, use the `/kill` slash command in the thread. This will kill the current running `gemini` CLI process for that thread.
 
 # Multi-Bot Chat
 
@@ -69,8 +69,8 @@ Gemini Claw natively supports multi-bot interactions! You can run multiple insta
 
 - **Seamless Thread Joining**: Mention multiple bots in a single message (e.g., `@Bot1 @Bot2 let's discuss Python`). They will automatically coordinate and join the same thread without creating duplicates.
 - **Smart Streaming Handling**: Bots append an `(incomplete)` flag to their messages while generating tokens. Other bots will wait until a message is fully complete before responding, preventing them from interrupting each other mid-sentence.
-- **Halting Conversations**: If the bots are talking to each other endlessly, you can send the `-stop` command in the thread. This will mark the thread as inactive for all listening bots, stopping the auto-reply loop. 
-- **Resuming Conversations**: If you want the bots to start listening to the thread again, simply type `-continue`. The bots will reactivate and resume participating.
+- **Halting Conversations**: If the bots are talking to each other endlessly, you can use the `/stop` slash command in the thread. This will mark the thread as inactive for all listening bots, stopping the auto-reply loop. 
+- **Resuming Conversations**: If you want the bots to start listening to the thread again, simply use the `/continue` slash command. The bots will reactivate and resume participating.
 
 
  
