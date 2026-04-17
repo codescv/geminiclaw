@@ -1,5 +1,5 @@
 # Check background tasks
-Check `memory/Background Tasks.md`.
+Check `memory/background_tasks.jsonl`.
 
 - Delete the expired tasks.
 - Check the status of the running background tasks. If task is finished (successful or failed), also delete it.

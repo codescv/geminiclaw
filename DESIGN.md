@@ -53,7 +53,7 @@ Inbound Channels (e.g. Discord, Google Chat) -> SQLite Database -> Polling loop 
 - **Outbound (Transmission)**: The agent can send files back to the user by including the syntax `[attachment: path/to/file]` in its response. The bot extracts these paths from the final response, verifies the files exist within the workspace, and securely uploads them as Discord attachments in a subsequent message.
  
 **6. Cronjobs Management**
-- **Triggering**: Periodically triggers based on `cron` schedule expressions using `apscheduler`. It also supports an optional `probability` parameter to randomly skip executions based on a given float chance.
+- **Triggering**: Periodically triggers based on `cron` schedule expressions using `apscheduler`. It also supports an optional `probability` parameter to randomly skip executions based on a given float chance, and a `skip_if_empty` parameter to skip execution if a specified file is empty or missing.
 - **Flow**: Reads a prompt file and inserts a **pending message** into the SQLite database with the target channel's ID and sets the `author_id` to the bot's own ID. Thread creation is deferred until a successful response is received (avoiding empty threads on `NO_REPLY`). Cronjobs always run with streaming disabled.
 - **Processing**: The standard async polling loop automatically picks this up, executes it with the Gemini agent, and delivers the response into the thread just like a normal user prompt. For silent messages, execution happens in the background without any Discord interaction. This decouples scheduling from execution logic.
  

@@ -4,10 +4,7 @@ Rules for agent - This file contains rules you need to follow while doing your j
 - Don't delete files using `rm`. Instead, **move** them to `~/.Trash`.
 
 # Background Processes
-For long running processes(e.g. >30min), you can run a command in the background:
-- set the `is_background` parameter to true.
-- **YOU MUST** use the command `nohup <command> & > <log_file>` to run it detached. Otherwise the process will just be killed when you reply to the user.
-- Before replying to the user, you must write memory about the task in `memory/Background Tasks.md`.(Read the file for detailed instructions.)
+For long running processes(e.g. >30min), you MUST use the `background-task` skill to run it in background.
 
 # Files Management
 **IMPORTANT**: No new files in current directory (the Gemini CLI workspace).

@@ -139,6 +139,7 @@ channel_id = "123456789012345678"            # Discord Channel ID (find in https
 mention_user_id = "123456789012345678"       # Optional: Your User ID to join the thread automatically
 silent = false                               # Optional: Set to true to run the job silently without sending Discord messages
 probability = 1.0                            # Optional: Probability of execution (0.0 to 1.0)
+skip_if_empty = "file_path"                  # Optional: Skip if this file is empty or missing
 ```
 
 # 📖 Tip: How to find your Discord User ID & Channel ID

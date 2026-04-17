@@ -66,6 +66,7 @@ class Agent:
             mention_user_id = job_config.get("mention_user_id")
             silent = job_config.get("silent", False)
             probability = job_config.get("probability")
+            skip_if_empty = job_config.get("skip_if_empty")
             if schedule and prompt_file and (channel_id or silent):
                 if not os.path.exists(prompt_file):
                     logger.warning(f"Cronjob prompt file not found at {prompt_file}. Skipping.")
@@ -74,7 +75,7 @@ class Agent:
                     self.scheduler.add_job(
                         self.run_cronjob,
                         CronTrigger.from_crontab(schedule),
-                        args=[prompt_file, channel_id, mention_user_id, silent, probability]
+                        args=[prompt_file, channel_id, mention_user_id, silent, probability, skip_if_empty]
                     )
                     logger.info(f"Added cronjob: {schedule} -> {prompt_file}, report channel: {channel_id}")
                 except Exception as e:
@@ -88,7 +89,8 @@ class Agent:
         channel_id,
         mention_user_id=None,
         silent: bool = False,
-        probability=None):
+        probability=None,
+        skip_if_empty=None):
         """
         Execute a configured cronjob, running the underlying Gemini CLI process.
 
@@ -98,6 +100,7 @@ class Agent:
             mention_user_id: Use the tag [mention:<id>] to ping the user.
             silent: If True, runs the CLI process strictly in the background without sending to chat bot.
             probability: Float representing the chance (0.0 to 1.0) that the cronjob runs.
+            skip_if_empty: Path to file to check for emptiness.
         """
         if probability is not None:
             try:
@@ -107,6 +110,20 @@ class Agent:
                     return
             except ValueError:
                 logger.exception(f"Cronjob Error: Invalid probability value {probability}")
+                
+        if skip_if_empty:
+            check_path = skip_if_empty if os.path.isabs(skip_if_empty) else os.path.join(self.cwd, skip_if_empty)
+            if not os.path.exists(check_path):
+                logger.info(f"Cronjob {prompt_file} skipped because {skip_if_empty} is missing.")
+                return
+            try:
+                with open(check_path, "r") as f:
+                    content = f.read()
+                if len(content.strip()) == 0:
+                    logger.info(f"Cronjob {prompt_file} skipped because {skip_if_empty} is empty.")
+                    return
+            except Exception as e:
+                logger.exception(f"Error reading skip_if_empty file {check_path}: {e}")
                 
         try:
             if not os.path.exists(prompt_file):
