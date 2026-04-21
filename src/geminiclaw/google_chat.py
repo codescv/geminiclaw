@@ -132,13 +132,14 @@ class GoogleChatBot(ChatBot):
         self.subscriber = None
         self.streaming_pull_future = None
         self.agent = None
+        self._current_streams = {}
 
     @property
     def user_id(self) -> str:
         return "google_chat_bot"
 
     def is_stream_off(self, channel_id: str) -> bool:
-        return True  # Always non-streaming for now
+        return False
 
     async def get_author_name(self, author_id: str) -> str:
         return f"User_{author_id}"
@@ -233,13 +234,153 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
             logger.exception(f"Error sending message to Google Chat")
 
     async def stream_start(self, channel_id: str):
-        pass
+        logger.info(f"Starting stream for channel {channel_id}")
+        space_name = channel_id
+        if space_name.startswith("gchat:"):
+            space_name = space_name[len("gchat:"):]
+            
+        parts = space_name.split('/')
+        if len(parts) >= 2 and parts[0] == 'spaces':
+            base_space = f"spaces/{parts[1]}"
+        else:
+            base_space = space_name
+            
+        try:
+            credentials, project_id = google.auth.default(
+                scopes=['https://www.googleapis.com/auth/chat.messages'],
+                quota_project_id=self.project_id
+            )
+            
+            service = build('chat', 'v1', credentials=credentials)
+            
+            body = {
+                'text': 'thinking...'
+            }
+            if '/threads/' in space_name:
+                body["thread"] = {"name": space_name}
+                
+            result = service.spaces().messages().create(
+                parent=base_space,
+                body=body,
+                messageReplyOption='REPLY_MESSAGE_OR_FAIL'
+            ).execute()
+            
+            message_name = result.get('name')
+            if message_name:
+                self._current_streams[channel_id] = {
+                    'name': message_name,
+                    'content': ''
+                }
+                logger.info(f"Successfully started stream: {message_name}")
+            else:
+                logger.error(f"Failed to get message name after create in stream_start")
+                
+        except Exception as e:
+            logger.exception(f"Error starting stream for Google Chat")
 
     async def stream_send(self, channel_id: str, chunk: str):
-        pass
+        if channel_id not in self._current_streams:
+            logger.warning(f"No active stream for channel {channel_id}")
+            return
+            
+        stream_info = self._current_streams[channel_id]
+        stream_info['content'] += chunk
+        
+        try:
+            credentials, project_id = google.auth.default(
+                scopes=['https://www.googleapis.com/auth/chat.messages'],
+                quota_project_id=self.project_id
+            )
+            
+            service = build('chat', 'v1', credentials=credentials)
+            
+            body = {
+                'text': stream_info['content'] + '\n(incomplete)'
+            }
+            
+            result = service.spaces().messages().update(
+                name=stream_info['name'],
+                updateMask='text',
+                body=body
+            ).execute()
+            logger.debug(f"Updated stream message: {result.get('name')}")
+            
+        except Exception as e:
+            logger.exception(f"Error sending stream chunk for Google Chat")
 
     async def stream_end(self, channel_id: str, error: str = None):
-        pass
+        if channel_id not in self._current_streams:
+            logger.warning(f"No active stream for channel {channel_id}")
+            return
+            
+        stream_info = self._current_streams.pop(channel_id)
+        
+        if error:
+            logger.error(f"Stream ended with error for {channel_id}: {error}")
+            stream_info['content'] += f"\n[Stream Error: {error}]"
+            
+        # Extract attachments (if any) and clean content
+        content = stream_info['content']
+        attachment_pattern = re.compile(r'\[attachment: (.*?)\]')
+        attachments = attachment_pattern.findall(content)
+        cleaned_content = attachment_pattern.sub('', content).strip()
+        
+        space_name = channel_id
+        if space_name.startswith("gchat:"):
+            space_name = space_name[len("gchat:"):]
+            
+        parts = space_name.split('/')
+        if len(parts) >= 2 and parts[0] == 'spaces':
+            base_space = f"spaces/{parts[1]}"
+        else:
+            base_space = space_name
+            
+        try:
+            credentials, project_id = google.auth.default(
+                scopes=['https://www.googleapis.com/auth/chat.messages'],
+                quota_project_id=self.project_id
+            )
+            
+            service = build('chat', 'v1', credentials=credentials)
+            
+            # Handle attachments
+            uploaded_attachments = []
+            for file_path in attachments:
+                if os.path.exists(file_path):
+                    mime_type, _ = mimetypes.guess_type(file_path)
+                    if not mime_type:
+                        mime_type = 'application/octet-stream'
+                        
+                    media = MediaFileUpload(file_path, mimetype=mime_type)
+                    
+                    attachment_uploaded = service.media().upload(
+                        parent=base_space,
+                        body={'filename': os.path.basename(file_path)},
+                        media_body=media
+                    ).execute()
+                    
+                    uploaded_attachments.append(attachment_uploaded)
+                else:
+                    logger.warning(f"Attachment file not found: {file_path}")
+            
+            body = {
+                'text': cleaned_content
+            }
+            update_mask = 'text'
+            
+            if uploaded_attachments:
+                body['attachment'] = uploaded_attachments
+                update_mask += ',attachment'
+                
+            result = service.spaces().messages().update(
+                name=stream_info['name'],
+                updateMask=update_mask,
+                body=body
+            ).execute()
+            logger.info(f"Successfully finalized stream message: {result.get('name')}")
+            
+        except Exception as e:
+            logger.exception(f"Error ending stream for Google Chat")
 
     async def update_idle_thread_name(self, channel_id: str, response: str):
         pass
@@ -390,7 +531,7 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
                         self.add_reaction(message_id, "👀")
                         
                     # Send "thinking..." message
-                    asyncio.run_coroutine_threadsafe(self.send_message(channel_id, "thinking..."), loop)
+                    # asyncio.run_coroutine_threadsafe(self.send_message(channel_id, "thinking..."), loop)
                         
                 message.ack()
             except Exception as e:

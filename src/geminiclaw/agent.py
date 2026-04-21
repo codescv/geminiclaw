@@ -364,10 +364,20 @@ class Agent:
                         content = parsed.get("content", "")
                         final_response += content
                         await self.bot.stream_send(channel_id, content)
+                    elif parsed.get("type") == "tool_use":
+                        tool_name = parsed.get('tool_name', '')
+                        tool_args = parsed.get('parameters', '')
+                        content = f"\nTool: {tool_name} Detail: {tool_args}\n"
+                        await self.bot.stream_send(channel_id, content)
+                    elif parsed.get("type") == "tool_result":
+                        status = parsed.get("status", "failed")
+                        content = "Status: ✅\n" if status == "success" else "Status: ❌\n"
+                        await self.bot.stream_send(channel_id, content)
                     elif parsed.get("type") == "result":
                         logger.info(f"result: {parsed}")
                     elif parsed.get("session_id"):
                         db.set_thread_session(channel_id, parsed.get("session_id"))
+                        
                 except json.JSONDecodeError:
                     logger.exception(f"json error: {line_str}")
 
