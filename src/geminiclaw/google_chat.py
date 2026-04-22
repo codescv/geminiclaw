@@ -385,7 +385,7 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
     async def update_idle_thread_name(self, channel_id: str, response: str):
         pass
 
-    def _handle_incoming_attachments(self, chat_message: dict, message_id: str) -> str | None:
+    def _handle_incoming_attachments(self, chat_message: dict) -> str | None:
         """Extract and download attachments from incoming message.
         
         Returns JSON string of relative paths or None.
@@ -469,6 +469,31 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
         except Exception as e:
             logger.warning(f"Failed to add reaction: {e}")
 
+    def _get_message_content(self, message_name: str) -> str:
+        """Fetch the text content of a Google Chat message by its resource name.
+        
+        Args:
+            message_name: The resource name of the message.
+            
+        Returns:
+            The text content of the message, or empty string if failed.
+        """
+        try:
+            credentials, _ = google.auth.default(
+                scopes=['https://www.googleapis.com/auth/chat.messages.readonly'],
+                quota_project_id=self.project_id
+            )
+            service = build('chat', 'v1', credentials=credentials)
+            result = service.spaces().messages().get(name=message_name).execute()
+            attachments = self._handle_incoming_attachments(result)
+            text = result.get('text', '')
+            if attachments:
+                text += f"\nAttachments: {attachments}"
+            return text
+        except Exception as e:
+            logger.warning(f"Failed to fetch quoted message {message_name}: {e}")
+            return ""
+
     async def start(self):
         """Start listening to Pub/Sub subscription."""
         logger.info("starting google chat")
@@ -482,16 +507,20 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
 
         def callback(message):
             # logger.info(f"Received Pub/Sub message: {message.data}")
-            logger.info(message.attributes)
+            # logger.info(message.attributes)
             try:
                 data = json.loads(message.data.decode('utf-8'))
-                # print(json.dumps(data, indent=2))
+                # logger.info(json.dumps(data, indent=2))
                 
                 # Google Chat events documentation:
                 # https://developers.google.com/chat/api/guides/message-formats/events
                 chat = data.get('chat', {})
                 payload = chat.get('messagePayload', {})
                 chat_message = payload.get('message')
+                
+                # spaces/{space_id}/messages/{message_id}
+                quoted_message = chat_message.get('quotedMessageMetadata', {}).get("name")
+                quoted_text = self._get_message_content(quoted_message) if quoted_message else ""
                 
                 if chat_message:
                     space = payload.get('space')
@@ -516,12 +545,13 @@ When sending attachments, use the exact syntax: [attachment: /path/to/file]
                     message_text = chat_message.get('text', '')
                     create_time = chat_message.get('createTime', 'unknown_time')
                     
-                    attachments_json = self._handle_incoming_attachments(chat_message, message_id)
+                    attachments_json = self._handle_incoming_attachments(chat_message)
                     
                     thread_name = thread.get('name') if thread else None
                     thread_str = f"in [Thread: {thread_name}]" if thread_name else ""
                     # Format prompt with content, author, timestamp, and thread name
-                    prompt = f"{message_text}\n--- From {author_name} ({author_email}) {thread_str} ---\n"
+                    quoted_message_str = f"[Quoted Message Content:{quoted_text} (Message id: {quoted_message})]\n" if quoted_text else (f"[Quoted Message id: {quoted_message}]\n" if quoted_message else "")
+                    prompt = f"{quoted_message_str}{message_text}\n--- From {author_name} ({author_email}) {thread_str} ---\n"
                     
                     logger.info(f"Inserting message from {author_name} in channel {channel_id}")
                     db.insert_message(channel_id, message_id, author_id, prompt, attachments=attachments_json)

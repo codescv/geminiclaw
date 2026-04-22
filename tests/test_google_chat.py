@@ -116,3 +116,40 @@ async def test_google_chat_bot_streaming():
         
     assert mock_messages.create.called
     assert mock_messages.update.called
+
+@pytest.mark.asyncio
+async def test_google_chat_bot_get_message_text():
+    from unittest.mock import MagicMock, patch
+    
+    bot = GoogleChatBot(google_chat_config={
+        'google_cloud_project': 'test-project'
+    })
+    
+    mock_service = MagicMock()
+    mock_messages = MagicMock()
+    mock_get = MagicMock()
+    
+    mock_service.spaces.return_value.messages.return_value = mock_messages
+    mock_messages.get.return_value = mock_get
+    mock_get.execute.return_value = {'text': 'Hello World'}
+    
+    mock_creds = MagicMock()
+    
+    with patch('geminiclaw.google_chat.build', return_value=mock_service), \
+         patch('google.auth.default', return_value=(mock_creds, 'project-id')):
+         
+        text = bot._get_message_content("spaces/1/messages/1")
+        assert text == 'Hello World'
+        
+    assert mock_messages.get.called
+
+@pytest.mark.asyncio
+async def test_google_chat_bot_get_message_text_failure():
+    from unittest.mock import MagicMock, patch
+    
+    bot = GoogleChatBot(google_chat_config={})
+    
+    with patch('google.auth.default', side_effect=Exception("Auth error")):
+        text = bot._get_message_content("spaces/1/messages/1")
+        assert text == ""
+
